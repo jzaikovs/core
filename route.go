@@ -11,6 +11,7 @@ type route struct {
 	callback   func(Input, Output)
 	method     string
 
+	handler  bool
 	req_json bool
 	no_cache bool
 

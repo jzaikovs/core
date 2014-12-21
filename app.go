@@ -13,6 +13,7 @@ import (
 var APP = New()
 
 type App struct {
+	Config *configs
 	routes []*route
 	hooks  map[string][]func()
 }
@@ -26,18 +27,24 @@ func New() *App {
 
 func (this *App) Run() {
 	Log.Info("creating core...")
-	Config.Load("config.json") // default configuration
-	Config.Load("prod.json")   // production specific configuration
-	Log.Info("core starting...")
+	//  create config if no initialized
+	if this.Config == nil {
+		this.Config = new(configs)
+		this.Config.Load("config.json") // default configuration
+		this.Config.Load("prod.json")   // production specific configuration
+	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", Config.Port))
+	addr := fmt.Sprintf(":%d", this.Config.Port)
+	Log.Info("core starting on", addr, "...")
+
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		panic(err)
 	}
 
 	this.executeHook("core.done")
 
-	if Config.FCGI {
+	if this.Config.FCGI {
 		fcgi.Serve(l, this)
 	} else {
 		http.Serve(l, this)
@@ -45,26 +52,35 @@ func (this *App) Run() {
 }
 
 func (this *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	input := new_input(r)
+	input := new_input(this, r)
 	output := new_output(w)
 
-	var ok bool
-	if ok = this.route(input, output); ok {
+	if this.route(input, output) {
 		return
 	}
-	if Config.HandleContent {
+
+	if this.Config.HandleContent {
 		ServeFile(output, input.RequestURI())
 	}
 	return
+}
+
+func (this *App) Handle(pattern string, handler http.Handler) {
+	r := newRoute("?", pattern, func(in Input, out Output) {
+		out.no_flush()
+		handler.ServeHTTP(out.ResponseWriter(), in.Request())
+	})
+	r.handler = true
+	this.routes = append(this.routes, r)
 }
 
 // Main method for dispatching routes
 func (this *App) route(in Input, out Output) bool {
 	startTime := time.Now()
 
-	// todo: this can be more optimized, for example dividing in buckets for each method
+	// TODO: this can be more optimized, for example dividing in buckets for each method
 	for _, r := range this.routes {
-		if in.Method() != r.method {
+		if !r.handler && in.Method() != r.method {
 			continue // skip routes with diferent methdo
 		}
 

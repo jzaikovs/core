@@ -19,6 +19,7 @@ const (
 	Response_Unsupported_Media_Type = 415
 	Response_Unprocessable_Entity   = 422
 	Response_Too_Many_Requests      = 429
+	Response_Internal_Server_Error  = 500
 )
 
 const (

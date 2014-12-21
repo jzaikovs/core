@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 )
 
-type confg struct {
+type configs struct {
 	BaseUrl       string                 `json:"base_url"`
 	FCGI          bool                   `json:"fcgi"`
 	HandleContent bool                   `json:"handle_content"`
@@ -15,9 +15,8 @@ type confg struct {
 	Data          map[string]interface{} `json:"data"`
 }
 
-var Config = &confg{}
-
-func (this *confg) Load(path string) error {
+// function for loading configuration from json file specified by path parameter.
+func (this *configs) Load(path string) error {
 	// default configurations
 	if this.Port == 0 {
 		this.Port = 8080
@@ -31,5 +30,7 @@ func (this *confg) Load(path string) error {
 		return err
 	}
 	Log.Info("Configuration loaded from file:", path)
+	b, _ := json.MarshalIndent(this, "", "  ")
+	Log.Info("Configs:\n", string(b))
 	return nil
 }

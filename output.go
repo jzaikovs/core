@@ -4,15 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 )
 
 type Output interface {
 	// writing function
-	Write([]byte) (int, error)
-	WriteString(string)
+	Write([]byte) (n int, err error)
+	WriteString(string) (n int, err error)
 	WriteJSON(interface{}) []byte
 
 	// response config
@@ -23,17 +22,19 @@ type Output interface {
 	SetCookieValue(string, string)
 	Redirect(url ...string)
 	AddHeader(string, interface{})
+	Header() http.Header
 
-	Writer() io.Writer
-
-	// send response
+	ResponseWriter() http.ResponseWriter
 	Flush()
+
+	no_flush()
 }
 
 type output struct {
 	response      http.ResponseWriter
 	buffer        bytes.Buffer
 	response_code int
+	noflush       bool
 }
 
 func new_output(response http.ResponseWriter) *output {
@@ -44,12 +45,19 @@ func new_output(response http.ResponseWriter) *output {
 }
 
 func (this *output) Write(p []byte) (n int, err error) {
-	n, err = this.buffer.Write(p)
-	return
+	return this.buffer.Write(p)
 }
 
-func (this *output) WriteString(str string) {
-	this.buffer.WriteString(str)
+func (this *output) Response(code int) {
+	this.response_code = code
+}
+
+func (this *output) Header() http.Header {
+	return this.response.Header()
+}
+
+func (this *output) WriteString(str string) (n int, err error) {
+	return this.buffer.WriteString(str)
 }
 
 func (this *output) WriteJSON(i interface{}) []byte {
@@ -63,10 +71,6 @@ func (this *output) WriteJSON(i interface{}) []byte {
 		this.Write(bytes)
 	}
 	return bytes
-}
-
-func (this *output) Response(code int) {
-	this.response_code = code
 }
 
 func (this *output) SetContentType(mime string) {
@@ -97,7 +101,12 @@ func (this *output) AddHeader(name string, value interface{}) {
 
 // write header and send buffer to response writer
 func (this *output) Flush() {
+	if this.noflush {
+		return
+	}
+
 	this.response.WriteHeader(this.response_code)
+
 	// write only if there is something to write
 	if this.buffer.Len() > 0 {
 		this.response.Write(this.buffer.Bytes())
@@ -105,6 +114,10 @@ func (this *output) Flush() {
 	}
 }
 
-func (this *output) Writer() io.Writer {
+func (this *output) ResponseWriter() http.ResponseWriter {
 	return this.response
+}
+
+func (this *output) no_flush() {
+	this.noflush = true
 }

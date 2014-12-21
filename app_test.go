@@ -3,7 +3,7 @@ package core
 import (
 	"bytes"
 	"encoding/json"
-	. "github.com/thejoker0/t"
+	. "github.com/jzaikovs/t"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
@@ -145,5 +145,4 @@ func TestBasic(t *testing.T) {
 	if !_read_cmp(_get(`http://127.0.0.1:8080/isauth`).Body, "auth") {
 		t.Fatal("Sess().IsAuth() not working")
 	}
-
 }

@@ -17,8 +17,11 @@ type Input interface {
 	Method() string
 	// Returns header value
 	Header(string) string
+
 	ContentType() string
+	// wrapper for http.Request.FormValue
 	FormValue(string) string
+
 	CookieValue(string) (string, bool)
 	// Return user agent
 	UserAgent() string
@@ -27,17 +30,24 @@ type Input interface {
 
 	// Returns true if request is marked as AJAX based
 	Ajax() bool
+	// Access to url parameters
 	Args(int) T
+	// Access to posted data
 	Data() Map
+	// Provides access to session data
 	Sess() *Sess
 
+	// returns body content, json post with json as content-body
 	Body() (result string)
+
+	Request() *http.Request
 
 	link_args([]T)
 	link_session(*Sess)
 }
 
 type input struct {
+	app     *App
 	request *http.Request
 	args    []T
 	sess    *Sess
@@ -45,11 +55,13 @@ type input struct {
 	body    []byte
 }
 
-func new_input(request *http.Request) *input {
-	this := new(input)
-	this.request = request
-	this.data = make(Map)
-	this.args = make([]T, 0)
+func new_input(app *App, request *http.Request) (this *input) {
+	this = &input{
+		request: request,
+		data:    make(Map),
+		args:    make([]T, 0),
+		app:     app,
+	}
 
 	parts := strings.Split(this.RequestURI(), "?")
 	if len(parts) > 1 {
@@ -75,7 +87,7 @@ func new_input(request *http.Request) *input {
 	buf.Write(this.body)
 	this.request.Body = ioutil.NopCloser(buf)
 
-	this.data["base_url"] = Config.BaseUrl
+	this.data["base_url"] = app.Config.BaseUrl
 	return this
 }
 
@@ -131,7 +143,7 @@ func (this *input) Data() Map {
 }
 
 func (this *input) RequestURI() string {
-	if Config.FCGI && len(this.request.URL.Opaque) > 0 {
+	if this.app.Config.FCGI && len(this.request.URL.Opaque) > 0 {
 		// using Nginx hack
 		// fastcgi_param REQUEST_URI "$scheme: $request_uri";
 		// fastcgi_param HTTP_HOST "";
@@ -139,10 +151,10 @@ func (this *input) RequestURI() string {
 	}
 	if len(this.request.RequestURI) > 0 {
 		return this.request.RequestURI
-	} else if Config.FCGI {
+	} else if this.app.Config.FCGI {
 		// using Nginx hack
 		// fastcgi_param HTTP_REQUEST_URI $request_uri;
-		return strings.TrimRight(this.request.Header.Get("Request-Uri"), "?")[len(Config.Subdir):]
+		return strings.TrimRight(this.request.Header.Get("Request-Uri"), "?")[len(this.app.Config.Subdir):]
 	}
 	return this.request.URL.Path
 }
@@ -189,4 +201,8 @@ func (this *input) Ajax() bool {
 		return true
 	}
 	return strings.ToLower(this.request.Header.Get("X-Requested-With")) == "xmlhttprequest"
+}
+
+func (this *input) Request() *http.Request {
+	return this.request
 }
