@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/jzaikovs/core/loggy"
 	. "github.com/jzaikovs/t"
 	"net"
 	"net/http"
@@ -9,11 +10,11 @@ import (
 	"time"
 )
 
-// default App
+// default application
 var APP = New()
 
 type App struct {
-	Config *configs
+	Config *t_configs
 	routes []*route
 	hooks  map[string][]func()
 }
@@ -26,16 +27,20 @@ func New() *App {
 }
 
 func (this *App) Run() {
-	Log.Info("creating core...")
-	//  create config if no initialized
+	loggy.Start()
+
+	loggy.Info("creating core...")
+	//  create configuration if no initialized
 	if this.Config == nil {
-		this.Config = new(configs)
+		this.Config = new(t_configs)
 		this.Config.Load("config.json") // default configuration
 		this.Config.Load("prod.json")   // production specific configuration
 	}
 
-	addr := fmt.Sprintf(":%d", this.Config.Port)
-	Log.Info("core starting on", addr, "...")
+	addr := fmt.Sprintf("%s:%d", this.Config.Host, this.Config.Port)
+
+	loggy.Info("core starting on", addr, "...")
+	fmt.Println("core starting on", addr, "...")
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -76,12 +81,15 @@ func (this *App) Handle(pattern string, handler http.Handler) {
 
 // Main method for dispatching routes
 func (this *App) route(in Input, out Output) bool {
+	//loggy.Log("ROUTE", in.RemoteAddr(), in.Method(), in.RequestURI())
+
 	startTime := time.Now()
 
 	// TODO: this can be more optimized, for example dividing in buckets for each method
+	// TODO: try use trie (aka prefix-tree) as routing method
 	for _, r := range this.routes {
 		if !r.handler && in.Method() != r.method {
-			continue // skip routes with diferent methdo
+			continue // skip routes with different method
 		}
 
 		matches := r.pattern.FindStringSubmatch(in.RequestURI())
@@ -90,8 +98,12 @@ func (this *App) route(in Input, out Output) bool {
 			continue // no match, go to next
 		}
 
+		// so we found our request
+		// now defer that at the end we write data
+
 		defer out.Flush()
 
+		// route asks for JSON as content type
 		if r.req_json {
 			if in.ContentType() != ContentType_JSON {
 				out.Response(Response_Unsupported_Media_Type)
@@ -100,11 +112,14 @@ func (this *App) route(in Input, out Output) bool {
 		}
 
 		// create arguments from groups in route pattern
+		// each group is next argument in arguments
 		matches = matches[1:]
 		args := make([]T, len(matches))
 		for i, match := range matches {
 			args[i] = T{match}
 		}
+
+		// connect our request to session manager
 		in.link_args(args)
 		in.link_session(session(in, out))
 
@@ -112,23 +127,27 @@ func (this *App) route(in Input, out Output) bool {
 		defer in.Sess().strip()
 
 		// testing rate limits
+		// TODO: need testing
 		if r.test_rate_limit(in, out, startTime) {
 			out.Response(Response_Too_Many_Requests)
 			return true
 		}
 
 		// testing if user is authorized
+		// route have flag that session must be authorize to access it
 		if r.test_authorized && !in.Sess().IsAuth() {
+			// if we have set up redirect then on fail we redirect there
 			if r.doredirect {
 				out.Redirect(r.redirect)
 				return true
 			}
+			// else just say that we are unauthorized
 			out.Response(Response_Unauthorized)
 			return true
 		}
 
-		in.Data()["is_auth"] = in.Sess().IsAuth()
-
+		// for request we can add some mandatory fields
+		// for example, we can add that for sign-in we need login and password
 		if len(r.needs) > 0 {
 			data := in.Data()
 			for _, need := range r.needs {
@@ -139,6 +158,10 @@ func (this *App) route(in Input, out Output) bool {
 			}
 		}
 
+		// this can be useful if we add session status in request data
+		// TODO: need some mark to identify core added data, example, $is_auth, $base_url, etc..
+		in.addData("is_auth", in.Sess().IsAuth())
+
 		if r.no_cache {
 			// this is for IE to not cache JSON responses!
 			out.AddHeader("If-Modified-Since", "01 Jan 1970 00:00:00 GMT")
@@ -147,7 +170,6 @@ func (this *App) route(in Input, out Output) bool {
 
 		// call route function
 		r.callback(in, out)
-
 		return true
 	}
 	return false

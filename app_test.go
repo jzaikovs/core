@@ -3,13 +3,14 @@ package core
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	. "github.com/jzaikovs/t"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
-	//"net/url"
-	"io"
 	"testing"
+	"time"
 )
 
 var _client = &http.Client{}
@@ -18,9 +19,10 @@ func init() {
 	_client.Jar, _ = cookiejar.New(nil)
 }
 
-func _get(url string) *http.Response {
+func _get(t *testing.T, url string) *http.Response {
 	resp, err := _client.Get(url)
 	if err != nil {
+		t.Error(err)
 		return nil
 	}
 	return resp
@@ -84,20 +86,28 @@ func TestBasic(t *testing.T) {
 		out.WriteString("limit")
 	}).RateLimit(5, 2)
 
+	// testing limited only to localhost
+	APP.Config = new(t_configs)
+	APP.Config.Host = "127.0.0.1"
+	APP.Config.Port = 8080
+
+	addr := fmt.Sprintf("%s:%d", APP.Config.Host, APP.Config.Port)
+
 	go APP.Run()
+	time.Sleep(time.Second)
 
 	for k, v := range map[string]string{
-		`http://127.0.0.1:8080/test`:        `hello world`,
-		`http://127.0.0.1:8080/test/1/test`: `1test`,
-		`http://127.0.0.1:8080/json/1/test`: `{"0":1,"1":"test"}`,
+		`http://` + addr + `/test`:        `hello world`,
+		`http://` + addr + `/test/1/test`: `1test`,
+		`http://` + addr + `/json/1/test`: `{"0":1,"1":"test"}`,
 	} {
-		if !_read_cmp(_get(k).Body, v) {
+		if !_read_cmp(_get(t, k).Body, v) {
 			t.Log(k, v)
 			t.Fail()
 		}
 	}
 
-	resp := _get(`http://127.0.0.1:8080/limit`)
+	resp := _get(t, `http://127.0.0.1:8080/limit`)
 	if val := resp.Header.Get(Header_X_Rate_Limit_Limit); val != "5" {
 		t.Fatal("Ratelimit not working")
 	}
@@ -105,17 +115,17 @@ func TestBasic(t *testing.T) {
 	if val := resp.Header.Get(Header_X_Rate_Limit_Remaining); val != "4" {
 		t.Fatal("Ratelimit not working #1")
 	}
-	resp = _get(`http://127.0.0.1:8080/limit`)
+	resp = _get(t, `http://127.0.0.1:8080/limit`)
 	if val := resp.Header.Get(Header_X_Rate_Limit_Remaining); val != "3" {
 		t.Fatal("Ratelimit not working #2")
 	}
 
 	for i := 0; i < 3; i++ {
 		// reach rate limit
-		_get(`http://127.0.0.1:8080/limit`)
+		_get(t, `http://127.0.0.1:8080/limit`)
 	}
 
-	if _get(`http://127.0.0.1:8080/limit`).StatusCode != Response_Too_Many_Requests {
+	if _get(t, `http://127.0.0.1:8080/limit`).StatusCode != Response_Too_Many_Requests {
 		t.Fatal("Ratelimit reached and no TooManyRequests")
 	}
 
@@ -126,11 +136,11 @@ func TestBasic(t *testing.T) {
 		t.Fatal("Need not validated")
 	}
 
-	if _get(`http://127.0.0.1:8080/auth`).StatusCode != Response_Unauthorized {
+	if _get(t, `http://127.0.0.1:8080/auth`).StatusCode != Response_Unauthorized {
 		t.Fatal("ReqAuth not validated")
 	}
 
-	if !_read_cmp(_get(`http://127.0.0.1:8080/isauth`).Body, "noauth") {
+	if !_read_cmp(_get(t, `http://127.0.0.1:8080/isauth`).Body, "noauth") {
 		t.Fatal("Sess().IsAuth() not working")
 	}
 
@@ -138,11 +148,11 @@ func TestBasic(t *testing.T) {
 		t.Fatal("Post not passed")
 	}
 
-	if !_read_cmp(_get(`http://127.0.0.1:8080/auth`).Body, "hello") {
+	if !_read_cmp(_get(t, `http://127.0.0.1:8080/auth`).Body, "hello") {
 		t.Fatal("Sess().Authorize not working")
 	}
 
-	if !_read_cmp(_get(`http://127.0.0.1:8080/isauth`).Body, "auth") {
+	if !_read_cmp(_get(t, `http://127.0.0.1:8080/isauth`).Body, "auth") {
 		t.Fatal("Sess().IsAuth() not working")
 	}
 }

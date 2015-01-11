@@ -1,11 +1,11 @@
 package core
 
-/*
-	TODO: REVIEW
-*/
+import (
+	"github.com/jzaikovs/core/loggy"
+)
 
 func (this *App) RegisterHook(name string, callback func()) {
-	Log.Info("registered hook:", name)
+	loggy.Info("registered hook:", name)
 
 	arr, ok := this.hooks[name]
 	if !ok {
@@ -16,14 +16,16 @@ func (this *App) RegisterHook(name string, callback func()) {
 }
 
 func (this *App) executeHook(name string) {
-	Log.Info("-----------" + name + "-------------")
-	Log.Info("executing hook:", name)
+	loggy.Info("-----------", name, "-------------")
+	loggy.Info("executing hook:", name)
+
 	if arr, ok := this.hooks[name]; ok {
 		for _, hook := range arr {
-			Log.Info("executing hook func:", name)
+			loggy.Info("executing hook func:", name)
 			hook()
 		}
 	}
-	Log.Info("hook", name, "executed.")
-	Log.Info("-------------------------------------")
+
+	loggy.Info("hook", name, "executed.")
+	loggy.Info("-------------------------------------")
 }

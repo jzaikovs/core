@@ -44,6 +44,7 @@ type Input interface {
 
 	link_args([]T)
 	link_session(*Sess)
+	addData(string, interface{})
 }
 
 type input struct {
@@ -205,4 +206,8 @@ func (this *input) Ajax() bool {
 
 func (this *input) Request() *http.Request {
 	return this.request
+}
+
+func (this *input) addData(k string, v interface{}) {
+	this.data[k] = v
 }
