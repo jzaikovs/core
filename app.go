@@ -15,13 +15,13 @@ var APP = New()
 
 type App struct {
 	Config *t_configs
-	routes []*route
+	routes []*t_route
 	hooks  map[string][]func()
 }
 
 func New() *App {
 	return &App{
-		routes: make([]*route, 0),
+		routes: make([]*t_route, 0),
 		hooks:  make(map[string][]func()),
 	}
 }
@@ -40,7 +40,6 @@ func (this *App) Run() {
 	addr := fmt.Sprintf("%s:%d", this.Config.Host, this.Config.Port)
 
 	loggy.Info("core starting on", addr, "...")
-	fmt.Println("core starting on", addr, "...")
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -80,6 +79,7 @@ func (this *App) Handle(pattern string, handler http.Handler) {
 }
 
 // Main method for dispatching routes
+// returns true if found route
 func (this *App) route(in Input, out Output) bool {
 	//loggy.Log("ROUTE", in.RemoteAddr(), in.Method(), in.RequestURI())
 
@@ -98,19 +98,6 @@ func (this *App) route(in Input, out Output) bool {
 			continue // no match, go to next
 		}
 
-		// so we found our request
-		// now defer that at the end we write data
-
-		defer out.Flush()
-
-		// route asks for JSON as content type
-		if r.req_json {
-			if in.ContentType() != ContentType_JSON {
-				out.Response(Response_Unsupported_Media_Type)
-				return true
-			}
-		}
-
 		// create arguments from groups in route pattern
 		// each group is next argument in arguments
 		matches = matches[1:]
@@ -119,80 +106,32 @@ func (this *App) route(in Input, out Output) bool {
 			args[i] = T{match}
 		}
 
-		// connect our request to session manager
-		in.link_args(args)
-		in.link_session(session(in, out))
-
-		// defer some cleanup when done routing
-		defer in.Sess().strip()
-
-		// testing rate limits
-		// TODO: need testing
-		if r.test_rate_limit(in, out, startTime) {
-			out.Response(Response_Too_Many_Requests)
-			return true
-		}
-
-		// testing if user is authorized
-		// route have flag that session must be authorize to access it
-		if r.test_authorized && !in.Sess().IsAuth() {
-			// if we have set up redirect then on fail we redirect there
-			if r.doredirect {
-				out.Redirect(r.redirect)
-				return true
-			}
-			// else just say that we are unauthorized
-			out.Response(Response_Unauthorized)
-			return true
-		}
-
-		// for request we can add some mandatory fields
-		// for example, we can add that for sign-in we need login and password
-		if len(r.needs) > 0 {
-			data := in.Data()
-			for _, need := range r.needs {
-				if _, ok := data[need]; !ok {
-					out.Response(Response_Unprocessable_Entity)
-					return true
-				}
-			}
-		}
-
-		// this can be useful if we add session status in request data
-		// TODO: need some mark to identify core added data, example, $is_auth, $base_url, etc..
-		in.addData("is_auth", in.Sess().IsAuth())
-
-		if r.no_cache {
-			// this is for IE to not cache JSON responses!
-			out.AddHeader("If-Modified-Since", "01 Jan 1970 00:00:00 GMT")
-			out.AddHeader("Cache-Control", "no-cache")
-		}
-
-		// call route function
-		r.callback(in, out)
+		// so we found our request
+		r.handle(args, startTime, in, out)
 		return true
 	}
+
 	return false
 }
 
-func (this *App) addRoute(method, pattern string, callback func(Input, Output)) *route {
+func (this *App) add_route(method, pattern string, callback func(Input, Output)) *t_route {
 	r := newRoute(method, pattern, callback)
 	this.routes = append(this.routes, r)
 	return r
 }
 
-func (this *App) Get(pattern string, callback func(Input, Output)) *route {
-	return this.addRoute("GET", pattern, callback)
+func (this *App) Get(pattern string, callback func(Input, Output)) *t_route {
+	return this.add_route("GET", pattern, callback)
 }
 
-func (this *App) Post(pattern string, callback func(Input, Output)) *route {
-	return this.addRoute("POST", pattern, callback)
+func (this *App) Post(pattern string, callback func(Input, Output)) *t_route {
+	return this.add_route("POST", pattern, callback)
 }
 
-func (this *App) Put(pattern string, callback func(Input, Output)) *route {
-	return this.addRoute("PUT", pattern, callback)
+func (this *App) Put(pattern string, callback func(Input, Output)) *t_route {
+	return this.add_route("PUT", pattern, callback)
 }
 
-func (this *App) Delete(pattern string, callback func(Input, Output)) *route {
-	return this.addRoute("DELETE", pattern, callback)
+func (this *App) Delete(pattern string, callback func(Input, Output)) *t_route {
+	return this.add_route("DELETE", pattern, callback)
 }
