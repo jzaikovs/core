@@ -6,23 +6,23 @@ import (
 	"time"
 )
 
-var sessions = make(map[string]*Sess) // todo: consider map[int] as it is rumored to be faster
+var sessions = make(map[string]*Session) // todo: consider map[int] as it is rumored to be faster
 var sessionslock = sync.RWMutex{}
 
-func sessions_get(sid string) (session *Sess, ok bool) {
+func sessions_get(sid string) (session *Session, ok bool) {
 	sessionslock.RLock()
 	session, ok = sessions[sid]
 	sessionslock.RUnlock()
 	return
 }
 
-func (this *Sess) save() {
+func (this *Session) save() {
 	sessionslock.Lock()
 	sessions[this.sid] = this
 	sessionslock.Unlock()
 }
 
-type Sess struct {
+type Session struct {
 	sid        string
 	authorized bool
 	input      Input
@@ -30,10 +30,10 @@ type Sess struct {
 	Data       Map
 }
 
-func session(input Input, output Output) *Sess {
+func session(input Input, output Output) *Session {
 	sid, ok := input.CookieValue("sid") // session identifier is store in cookie
 	if !ok {
-		sid = input.Header("api_sid") // or it can be passed as header value from API client
+		sid = input.HeaderValue("api_sid") // or it can be passed as header value from API client
 		ok = len(sid) > 0
 	}
 
@@ -46,35 +46,35 @@ func session(input Input, output Output) *Sess {
 		}
 	}
 
-	sess := new(Sess)
-	sess.input = input
-	sess.output = output
-	sess.Data = make(Map)
-	sess.CreateCookie(time.Now().String())
-	return sess
+	session := new(Session)
+	session.input = input
+	session.output = output
+	session.Data = make(Map)
+	session.CreateCookie(time.Now().String())
+	return session
 }
 
-func (this *Sess) ID() string {
+func (this *Session) ID() string {
 	return this.sid
 }
 
-func (this *Sess) IsAuth() bool {
+func (this *Session) IsAuth() bool {
 	return this.authorized
 }
 
-func (this *Sess) Destroy() {
+func (this *Session) Destroy() {
 	sessionslock.Lock()
 	delete(sessions, this.sid)
 	sessionslock.Unlock()
 }
 
-func (this *Sess) Authorize(salt string) {
+func (this *Session) Authorize(salt string) {
 	this.Destroy()
 	this.CreateCookie(salt)
 	this.authorized = true
 }
 
-func (this *Sess) CreateCookie(salt string) {
+func (this *Session) CreateCookie(salt string) {
 	this.sid = salt
 	this.sid += this.input.UserAgent()
 	this.sid += this.input.RemoteAddr()
@@ -89,7 +89,7 @@ func (this *Sess) CreateCookie(salt string) {
 // Strip removes unused references to memory,
 // fo example 10k users session is stored in
 // memory but we don't need to store input and output modules
-func (this *Sess) strip() {
+func (this *Session) strip() {
 	//this is needed for Go GC to do it's job
 	this.input = nil
 	this.output = nil

@@ -32,7 +32,7 @@ func (this *App) Run() {
 	loggy.Info("creating core...")
 	//  create configuration if no initialized
 	if this.Config == nil {
-		this.Config = new(t_configs)
+		this.Config = new_t_config()
 		this.Config.Load("config.json") // default configuration
 		this.Config.Load("prod.json")   // production specific configuration
 	}
@@ -70,10 +70,10 @@ func (this *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (this *App) Handle(pattern string, handler http.Handler) {
-	r := newRoute("?", pattern, func(in Input, out Output) {
-		out.no_flush()
-		handler.ServeHTTP(out.ResponseWriter(), in.Request())
-	})
+	r := newRoute("?", pattern, func(context Context) {
+		context.no_flush()
+		handler.ServeHTTP(context.ResponseWriter(), context.Request())
+	}, this)
 	r.handler = true
 	this.routes = append(this.routes, r)
 }
@@ -114,24 +114,24 @@ func (this *App) route(in Input, out Output) bool {
 	return false
 }
 
-func (this *App) add_route(method, pattern string, callback func(Input, Output)) *t_route {
-	r := newRoute(method, pattern, callback)
+func (this *App) add_route(method, pattern string, callback RouteFunc) *t_route {
+	r := newRoute(method, pattern, callback, this)
 	this.routes = append(this.routes, r)
 	return r
 }
 
-func (this *App) Get(pattern string, callback func(Input, Output)) *t_route {
+func (this *App) Get(pattern string, callback RouteFunc) *t_route {
 	return this.add_route("GET", pattern, callback)
 }
 
-func (this *App) Post(pattern string, callback func(Input, Output)) *t_route {
+func (this *App) Post(pattern string, callback RouteFunc) *t_route {
 	return this.add_route("POST", pattern, callback)
 }
 
-func (this *App) Put(pattern string, callback func(Input, Output)) *t_route {
+func (this *App) Put(pattern string, callback RouteFunc) *t_route {
 	return this.add_route("PUT", pattern, callback)
 }
 
-func (this *App) Delete(pattern string, callback func(Input, Output)) *t_route {
+func (this *App) Delete(pattern string, callback RouteFunc) *t_route {
 	return this.add_route("DELETE", pattern, callback)
 }

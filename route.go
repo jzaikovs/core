@@ -2,15 +2,22 @@ package core
 
 import (
 	"crypto/rand"
+	"errors"
+	"fmt"
+	"github.com/jzaikovs/core/loggy"
 	. "github.com/jzaikovs/t"
 	"regexp"
 	"time"
 )
 
+type RouteFunc func(Context)
+
 type t_route struct {
+	app *App
+
 	patternStr string
 	pattern    *regexp.Regexp
-	callback   func(Input, Output)
+	callback   RouteFunc
 	method     string
 
 	handler  bool
@@ -27,19 +34,22 @@ type t_route struct {
 	limits     map[string]*ratelimit // this is rate limit for each IP address
 	limitsAuth map[string]*ratelimit
 
+	rules []func(context Context) error
+
 	need_valid_csrf_token bool
 	emit_csrf_token       bool
 
 	needs []string
 }
 
-func newRoute(method, pattern string, callback func(Input, Output)) *t_route {
-	r := new(t_route)
-	r.patternStr = pattern
-	r.pattern = regexp.MustCompile(pattern)
-	r.callback = callback
-	r.method = method
-	return r
+func newRoute(method, pattern string, callback RouteFunc, app *App) *t_route {
+	return &t_route{
+		app:        app,
+		patternStr: pattern,
+		pattern:    regexp.MustCompile(pattern),
+		callback:   callback,
+		method:     method,
+	}
 }
 
 func (this *t_route) ReqAuth(args ...string) *t_route {
@@ -51,8 +61,22 @@ func (this *t_route) ReqAuth(args ...string) *t_route {
 	return this
 }
 
-func (this *t_route) Need(fields ...string) {
-	this.needs = append(this.needs, fields...)
+func (this *t_route) Need(fields ...string) *t_route {
+	this.rules = append(this.rules, func(context Context) error {
+		data := context.Data()
+		// for request we can add some mandatory fields
+		// for example, we can add that for sign-in we need login and password
+		for _, need := range fields {
+			if _, ok := data[need]; !ok {
+				// TODO: if string, then check for empty string?
+				return errors.New(fmt.Sprintf("field [%s] required", need))
+			}
+		}
+
+		return nil
+	})
+
+	return this
 }
 
 func (this *t_route) RateLimitAuth(rate, per float32) *t_route {
@@ -64,6 +88,20 @@ func (this *t_route) RateLimitAuth(rate, per float32) *t_route {
 func (this *t_route) RateLimit(rate, per float32) *t_route {
 	this.limit = new_ratelimit(rate, per)
 	this.limits = make(map[string]*ratelimit)
+	return this
+}
+
+func (this *t_route) Match(nameA, nameB string) *t_route {
+	this.rules = append(this.rules, func(context Context) error {
+		data := context.Data()
+
+		if data.Str(nameA) != data.Str(nameB) {
+			return errors.New(fmt.Sprintf(`field [%s] not match field [%s]`, nameA, nameB))
+		}
+
+		return nil
+	})
+
 	return this
 }
 
@@ -93,10 +131,11 @@ func (this *t_route) test_rate_limit(in Input, out Output, t time.Time) bool {
 		ok    bool
 	)
 
-	if in.Sess().IsAuth() {
+	if in.Session().IsAuth() {
 		if this.limitAuth == nil {
 			return false
 		}
+
 		if limit, ok = this.limitsAuth[in.RemoteAddr()]; !ok { // TODO: improve and remove race
 			limit = new_ratelimit(this.limitAuth.rate, this.limitAuth.per)
 			limit.lass_check = t
@@ -138,7 +177,7 @@ func (this *t_route) handle(args []T, startTime time.Time, in Input, out Output)
 	in.link_session(session(in, out))
 
 	// defer some cleanup when done routing
-	defer in.Sess().strip()
+	defer in.Session().strip()
 
 	// testing rate limits
 	// TODO: need testing
@@ -149,7 +188,7 @@ func (this *t_route) handle(args []T, startTime time.Time, in Input, out Output)
 
 	// testing if user is authorized
 	// route have flag that session must be authorize to access it
-	if this.test_authorized && !in.Sess().IsAuth() {
+	if this.test_authorized && !in.Session().IsAuth() {
 		// if we have set up redirect then on fail we redirect there
 		if this.doredirect {
 			out.Redirect(this.redirect)
@@ -162,29 +201,17 @@ func (this *t_route) handle(args []T, startTime time.Time, in Input, out Output)
 
 	if this.need_valid_csrf_token {
 		csrf, ok := in.CookieValue("_csrf")
-		if !ok || len(csrf) == 0 || csrf != in.Sess().Data.Str("_csrf") {
+		if !ok || len(csrf) == 0 || csrf != in.Session().Data.Str("_csrf") {
 			out.Response(Response_Forbidden) // TODO: what is best status code for CSRF violation
 			return
 		}
-		delete(in.Sess().Data, "_csrf")
+		delete(in.Session().Data, "_csrf")
 		out.SetCookieValue("_csrf", "")
-	}
-
-	// for request we can add some mandatory fields
-	// for example, we can add that for sign-in we need login and password
-	if len(this.needs) > 0 {
-		data := in.Data()
-		for _, need := range this.needs {
-			if _, ok := data[need]; !ok {
-				out.Response(Response_Unprocessable_Entity)
-				return
-			}
-		}
 	}
 
 	// this can be useful if we add session status in request data
 	// TODO: need some mark to identify core added data, example, $is_auth, $base_url, etc..
-	in.addData("is_auth", in.Sess().IsAuth())
+	in.addData("is_auth", in.Session().IsAuth())
 
 	if this.no_cache {
 		// this is for IE to not cache JSON responses!
@@ -198,10 +225,22 @@ func (this *t_route) handle(args []T, startTime time.Time, in Input, out Output)
 		b := make([]byte, 16)
 		rand.Read(b)
 		csrf := Base64Encode(b)
-		in.Sess().Data["_csrf"] = csrf
+		in.Session().Data["_csrf"] = csrf
 		out.SetCookieValue("_csrf", csrf)
 	}
 
+	context := t_context{in, out}
+
+	// validate all added rules
+	for _, rule := range this.rules {
+		if err := rule(context); err != nil {
+			loggy.Log("BAD", context.RemoteAddr(), err)
+			out.WriteJSON(this.app.Config.err_object_func(Response_Bad_Request, err))
+			out.Response(Response_Bad_Request)
+			return
+		}
+	}
+
 	// call route function
-	this.callback(in, out)
+	this.callback(context)
 }

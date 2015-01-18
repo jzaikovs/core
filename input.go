@@ -13,10 +13,10 @@ type Input interface {
 	RequestURI() string
 	// Get used for getting GET passed parameters
 	Get(key string) (val string)
-	// Returns method of reuqest (GET, POST, PUT, ...)
+	// Returns method of request (GET, POST, PUT, ...)
 	Method() string
 	// Returns header value
-	Header(string) string
+	HeaderValue(string) string
 
 	ContentType() string
 	// wrapper for http.Request.FormValue
@@ -25,25 +25,25 @@ type Input interface {
 	CookieValue(string) (string, bool)
 	// Return user agent
 	UserAgent() string
-	// Returns remote IP addresss
+	// Returns remote IP address
 	RemoteAddr() string
 
 	// Returns true if request is marked as AJAX based
 	Ajax() bool
-	// Access to url parameters
+	// Access to URL parameters
 	Args(int) T
 	// Access to posted data
 	Data() Map
 	// Provides access to session data
-	Sess() *Sess
+	Session() *Session
 
-	// returns body content, json post with json as content-body
+	// returns body content, JSON post with JSON as content-body
 	Body() (result string)
 
 	Request() *http.Request
 
 	link_args([]T)
-	link_session(*Sess)
+	link_session(*Session)
 	addData(string, interface{})
 }
 
@@ -51,8 +51,9 @@ type input struct {
 	app     *App
 	request *http.Request
 	args    []T
-	sess    *Sess
+	session *Session
 	data    Map
+	parsed  bool
 	body    []byte
 }
 
@@ -96,22 +97,27 @@ func (this *input) link_args(args []T) {
 	this.args = args
 }
 
-func (this *input) link_session(sess *Sess) {
-	this.sess = sess
+func (this *input) link_session(session *Session) {
+	this.session = session
 }
 
 func (this *input) Args(idx int) T {
 	return this.args[idx]
 }
 
-func (this *input) Sess() *Sess {
-	return this.sess
+func (this *input) Session() *Session {
+	return this.session
 }
 func (this *input) ContentType() string {
-	return this.Header("Content-Type")
+	return this.HeaderValue("Content-Type")
 }
 
 func (this *input) Data() Map {
+	// repeat request will return result of previous calls
+	if this.parsed {
+		return this.data
+	}
+
 	if this.ContentType() == ContentType_JSON {
 		temp := make(Map)
 		json.Unmarshal(this.body, &temp)
@@ -123,6 +129,10 @@ func (this *input) Data() Map {
 				this.data[k] = v
 			}
 		}
+
+		// mark that data is parsed and can be returned on next call without parsing
+		this.parsed = true
+
 		return this.data
 	}
 
@@ -130,6 +140,7 @@ func (this *input) Data() Map {
 		this.request.ParseMultipartForm(32 << 20) // 32MB
 	}
 
+	// read all form values if we have post-data
 	for k, v := range this.request.Form {
 		switch len(v) {
 		case 1:
@@ -139,6 +150,8 @@ func (this *input) Data() Map {
 			this.data[k] = v
 		}
 	}
+
+	this.parsed = true
 
 	return this.data
 }
@@ -160,7 +173,7 @@ func (this *input) RequestURI() string {
 	return this.request.URL.Path
 }
 
-func (this *input) Header(key string) string {
+func (this *input) HeaderValue(key string) string {
 	return this.request.Header.Get(key)
 }
 

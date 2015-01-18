@@ -18,16 +18,16 @@ var (
 )
 
 func init() {
-	test_app.Config = new(t_configs)
+	test_app.Config = new_t_config()
 	test_app.Config.Host = "127.0.0.1"
 	test_app.Config.Port = 31337
 	go test_app.Run()
 	test_url = "http://127.0.0.1:" + strconv.Itoa(test_app.Config.Port)
 }
 
-func simple_resp(ret string) func(in Input, out Output) {
-	return func(in Input, out Output) {
-		out.WriteString(ret)
+func simple_resp(ret string) func(context Context) {
+	return func(context Context) {
+		context.WriteString(ret)
 	}
 }
 

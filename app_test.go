@@ -50,44 +50,44 @@ func _to_json(x interface{}) string {
 
 func TestBasic(t *testing.T) {
 
-	APP.Get(`^/test$`, func(in Input, out Output) {
-		out.WriteString("hello world")
+	APP.Get(`^/test$`, func(context Context) {
+		context.WriteString("hello world")
 	})
 
-	APP.Get(`^/test/(\d+)/([^/]+)$`, func(in Input, out Output) {
-		out.WriteString(in.Args(0).String())
-		out.WriteString(in.Args(1).String())
+	APP.Get(`^/test/(\d+)/([^/]+)$`, func(context Context) {
+		context.WriteString(context.Args(0).String())
+		context.WriteString(context.Args(1).String())
 	})
 
-	APP.Get(`^/json/(\d+)/([^/]+)$`, func(in Input, out Output) {
-		out.WriteJSON(map[string]interface{}{
-			"0": in.Args(0).Int(),
-			"1": in.Args(1).String(),
+	APP.Get(`^/json/(\d+)/([^/]+)$`, func(context Context) {
+		context.WriteJSON(map[string]interface{}{
+			"0": context.Args(0).Int(),
+			"1": context.Args(1).String(),
 		})
 	})
 
-	APP.Get(`^/isauth$`, func(in Input, out Output) {
-		if in.Sess().IsAuth() {
-			out.WriteString("auth")
+	APP.Get(`^/isauth$`, func(context Context) {
+		if context.Session().IsAuth() {
+			context.WriteString("auth")
 		} else {
-			out.WriteString("noauth")
+			context.WriteString("noauth")
 		}
 	})
 
-	APP.Get(`^/auth$`, func(in Input, out Output) {
-		out.WriteString("hello")
+	APP.Get(`^/auth$`, func(context Context) {
+		context.WriteString("hello")
 	}).ReqAuth()
 
-	APP.Post(`^/auth$`, func(in Input, out Output) {
-		in.Sess().Authorize("")
+	APP.Post(`^/auth$`, func(context Context) {
+		context.Session().Authorize("")
 	}).Need("username", "password")
 
-	APP.Get(`^/limit$`, func(in Input, out Output) {
-		out.WriteString("limit")
+	APP.Get(`^/limit$`, func(context Context) {
+		context.WriteString("limit")
 	}).RateLimit(5, 2)
 
 	// testing limited only to localhost
-	APP.Config = new(t_configs)
+	APP.Config = new_t_config()
 	APP.Config.Host = "127.0.0.1"
 	APP.Config.Port = 8080
 
@@ -129,10 +129,11 @@ func TestBasic(t *testing.T) {
 		t.Fatal("Ratelimit reached and no TooManyRequests")
 	}
 
-	if _post(`http://127.0.0.1:8080/auth`, Map{"password": "y"}).StatusCode != Response_Unprocessable_Entity {
+	if _post(`http://127.0.0.1:8080/auth`, Map{"password": "y"}).StatusCode != Response_Bad_Request {
 		t.Fatal("Need not validated")
 	}
-	if _post(`http://127.0.0.1:8080/auth`, Map{"username": "x"}).StatusCode != Response_Unprocessable_Entity {
+
+	if _post(`http://127.0.0.1:8080/auth`, Map{"username": "x"}).StatusCode != Response_Bad_Request {
 		t.Fatal("Need not validated")
 	}
 
@@ -141,7 +142,7 @@ func TestBasic(t *testing.T) {
 	}
 
 	if !_read_cmp(_get(t, `http://127.0.0.1:8080/isauth`).Body, "noauth") {
-		t.Fatal("Sess().IsAuth() not working")
+		t.Fatal("Session().IsAuth() not working")
 	}
 
 	if _post(`http://127.0.0.1:8080/auth`, Map{"username": "x", "password": "y"}).StatusCode != Response_Ok {
@@ -149,10 +150,10 @@ func TestBasic(t *testing.T) {
 	}
 
 	if !_read_cmp(_get(t, `http://127.0.0.1:8080/auth`).Body, "hello") {
-		t.Fatal("Sess().Authorize not working")
+		t.Fatal("Session().Authorize not working")
 	}
 
 	if !_read_cmp(_get(t, `http://127.0.0.1:8080/isauth`).Body, "auth") {
-		t.Fatal("Sess().IsAuth() not working")
+		t.Fatal("Session().IsAuth() not working")
 	}
 }
