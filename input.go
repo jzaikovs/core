@@ -10,6 +10,8 @@ import (
 )
 
 type Input interface {
+	App() *App
+
 	RequestURI() string
 	// Get used for getting GET passed parameters
 	Get(key string) (val string)
@@ -47,7 +49,7 @@ type Input interface {
 	addData(string, interface{})
 }
 
-type input struct {
+type t_input struct {
 	app     *App
 	request *http.Request
 	args    []T
@@ -57,8 +59,8 @@ type input struct {
 	body    []byte
 }
 
-func new_input(app *App, request *http.Request) (this *input) {
-	this = &input{
+func new_input(app *App, request *http.Request) (this *t_input) {
+	this = &t_input{
 		request: request,
 		data:    make(Map),
 		args:    make([]T, 0),
@@ -93,26 +95,30 @@ func new_input(app *App, request *http.Request) (this *input) {
 	return this
 }
 
-func (this *input) link_args(args []T) {
+func (this *t_input) App() *App {
+	return this.app
+}
+
+func (this *t_input) link_args(args []T) {
 	this.args = args
 }
 
-func (this *input) link_session(session *Session) {
+func (this *t_input) link_session(session *Session) {
 	this.session = session
 }
 
-func (this *input) Args(idx int) T {
+func (this *t_input) Args(idx int) T {
 	return this.args[idx]
 }
 
-func (this *input) Session() *Session {
+func (this *t_input) Session() *Session {
 	return this.session
 }
-func (this *input) ContentType() string {
+func (this *t_input) ContentType() string {
 	return this.HeaderValue("Content-Type")
 }
 
-func (this *input) Data() Map {
+func (this *t_input) Data() Map {
 	// repeat request will return result of previous calls
 	if this.parsed {
 		return this.data
@@ -156,7 +162,7 @@ func (this *input) Data() Map {
 	return this.data
 }
 
-func (this *input) RequestURI() string {
+func (this *t_input) RequestURI() string {
 	if this.app.Config.FCGI && len(this.request.URL.Opaque) > 0 {
 		// using Nginx hack
 		// fastcgi_param REQUEST_URI "$scheme: $request_uri";
@@ -173,24 +179,24 @@ func (this *input) RequestURI() string {
 	return this.request.URL.Path
 }
 
-func (this *input) HeaderValue(key string) string {
+func (this *t_input) HeaderValue(key string) string {
 	return this.request.Header.Get(key)
 }
 
-func (this *input) Get(key string) (val string) {
+func (this *t_input) Get(key string) (val string) {
 	val = this.data.Str(key)
 	return
 }
 
-func (this *input) Method() string {
+func (this *t_input) Method() string {
 	return this.request.Method
 }
 
-func (this *input) FormValue(name string) string {
+func (this *t_input) FormValue(name string) string {
 	return this.request.FormValue(name)
 }
 
-func (this *input) CookieValue(name string) (string, bool) {
+func (this *t_input) CookieValue(name string) (string, bool) {
 	cookie, err := this.request.Cookie(name)
 	if err != nil {
 		return "", false
@@ -198,29 +204,29 @@ func (this *input) CookieValue(name string) (string, bool) {
 	return cookie.Value, true
 }
 
-func (this *input) UserAgent() string {
+func (this *t_input) UserAgent() string {
 	return this.request.UserAgent()
 }
 
-func (this *input) RemoteAddr() string {
+func (this *t_input) RemoteAddr() string {
 	return strings.Split(this.request.RemoteAddr, ":")[0]
 }
 
-func (this *input) Body() string {
+func (this *t_input) Body() string {
 	return string(this.body)
 }
 
-func (this *input) Ajax() bool {
+func (this *t_input) Ajax() bool {
 	if this.ContentType() == "application/json" {
 		return true
 	}
 	return strings.ToLower(this.request.Header.Get("X-Requested-With")) == "xmlhttprequest"
 }
 
-func (this *input) Request() *http.Request {
+func (this *t_input) Request() *http.Request {
 	return this.request
 }
 
-func (this *input) addData(k string, v interface{}) {
+func (this *t_input) addData(k string, v interface{}) {
 	this.data[k] = v
 }
