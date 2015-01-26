@@ -3,6 +3,8 @@ package core
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/jzaikovs/core/loggy"
+	"github.com/jzaikovs/core/session"
 	. "github.com/jzaikovs/t"
 	"io/ioutil"
 	"net/http"
@@ -37,7 +39,7 @@ type Input interface {
 	// Access to posted data
 	Data() Map
 	// Provides access to session data
-	Session() *Session
+	Session() *session.Session
 
 	// returns body content, JSON post with JSON as content-body
 	Body() (result string)
@@ -45,7 +47,7 @@ type Input interface {
 	Request() *http.Request
 
 	link_args([]T)
-	link_session(*Session)
+	link_session(*session.Session)
 	addData(string, interface{})
 }
 
@@ -53,7 +55,7 @@ type t_input struct {
 	app     *App
 	request *http.Request
 	args    []T
-	session *Session
+	session *session.Session
 	data    Map
 	parsed  bool
 	body    []byte
@@ -103,7 +105,7 @@ func (this *t_input) link_args(args []T) {
 	this.args = args
 }
 
-func (this *t_input) link_session(session *Session) {
+func (this *t_input) link_session(session *session.Session) {
 	this.session = session
 }
 
@@ -111,7 +113,7 @@ func (this *t_input) Args(idx int) T {
 	return this.args[idx]
 }
 
-func (this *t_input) Session() *Session {
+func (this *t_input) Session() *session.Session {
 	return this.session
 }
 func (this *t_input) ContentType() string {
@@ -124,9 +126,16 @@ func (this *t_input) Data() Map {
 		return this.data
 	}
 
-	if this.ContentType() == ContentType_JSON {
+	if strings.Contains(this.ContentType(), ContentType_JSON) {
 		temp := make(Map)
-		json.Unmarshal(this.body, &temp)
+
+		// parse body for JSON data into temporal map
+		if err := json.Unmarshal(this.body, &temp); err != nil {
+			loggy.Error("core.input.data err", this.RemoteAddr(), err.Error(), string(this.body))
+		}
+
+		// clean all incoming values, to protect as from some bad injections
+		// TODO: do we really need?
 		for k, v := range temp {
 			switch val := v.(type) {
 			case string:

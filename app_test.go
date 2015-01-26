@@ -109,15 +109,15 @@ func TestBasic(t *testing.T) {
 
 	resp := _get(t, `http://127.0.0.1:8080/limit`)
 	if val := resp.Header.Get(Header_X_Rate_Limit_Limit); val != "5" {
-		t.Fatal("Ratelimit not working")
+		t.Fatal("Ratelimit not working", val)
 	}
 
 	if val := resp.Header.Get(Header_X_Rate_Limit_Remaining); val != "4" {
-		t.Fatal("Ratelimit not working #1")
+		t.Fatal("Ratelimit not working #1", val)
 	}
 	resp = _get(t, `http://127.0.0.1:8080/limit`)
 	if val := resp.Header.Get(Header_X_Rate_Limit_Remaining); val != "3" {
-		t.Fatal("Ratelimit not working #2")
+		t.Fatal("Ratelimit not working #2", val)
 	}
 
 	for i := 0; i < 3; i++ {

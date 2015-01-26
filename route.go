@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jzaikovs/core/loggy"
+	"github.com/jzaikovs/core/session"
 	. "github.com/jzaikovs/t"
 	"regexp"
 	"time"
@@ -153,8 +154,8 @@ func (this *t_route) test_rate_limit(in Input, out Output, t time.Time) bool {
 		}
 	}
 	ok = limit.test(t)
-	out.AddHeader(Header_X_Rate_Limit_Limit, limit.rate)
-	out.AddHeader(Header_X_Rate_Limit_Remaining, limit.allowance)
+	out.AddHeader(Header_X_Rate_Limit_Limit, int(limit.rate))
+	out.AddHeader(Header_X_Rate_Limit_Remaining, int(limit.allowance))
 	return !ok
 }
 
@@ -172,17 +173,19 @@ func (this *t_route) handle(args []T, startTime time.Time, in Input, out Output)
 		}
 	}
 
+	context := t_context{in, out}
+
 	// connect our request to session manager
 	in.link_args(args)
-	in.link_session(session(in, out))
+	in.link_session(session.New(context))
 
 	// defer some cleanup when done routing
-	defer in.Session().strip()
+	defer in.Session().Unlink()
 
 	// testing rate limits
 	// TODO: need testing
 	if this.test_rate_limit(in, out, startTime) {
-		out.Response(Response_Too_Many_Requests)
+		context.Response(Response_Too_Many_Requests)
 		return
 	}
 
@@ -228,8 +231,6 @@ func (this *t_route) handle(args []T, startTime time.Time, in Input, out Output)
 		in.Session().Data["_csrf"] = csrf
 		out.SetCookieValue("_csrf", csrf)
 	}
-
-	context := t_context{in, out}
 
 	// validate all added rules
 	for _, rule := range this.rules {
