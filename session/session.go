@@ -5,18 +5,19 @@ import (
 	_ "crypto/sha1"
 	"encoding/base64"
 	. "github.com/jzaikovs/t"
+	"net/http"
 	"sync"
 	"time"
 )
 
 var (
-	SESSION_ID             = "sid"
-	HASH       crypto.Hash = crypto.SHA1
+	SESSION_ID_NAME             = "sid"
+	HASH            crypto.Hash = crypto.SHA1
 )
 
 type Server interface {
-	CookieValue(key string) (string, bool)
-	SetCookieValue(key, value string)
+	CookieValue(name string) (string, bool)
+	SetCookieValue(name, value string)
 	UserAgent() string
 	RemoteAddr() string
 }
@@ -44,8 +45,20 @@ type Session struct {
 	Data       Map
 }
 
+func Validate(req *http.Request) (string, bool) {
+	cookie, err := req.Cookie(SESSION_ID_NAME)
+	if err != nil {
+		return "", false
+	}
+
+	if sesssion, ok := sessions_get(cookie.Value); ok {
+		return sesssion.ID(), sesssion.Valid("", req.UserAgent(), req.RemoteAddr)
+	}
+	return "", false
+}
+
 func New(server Server) *Session {
-	sid, ok := server.CookieValue(SESSION_ID) // session identifier is store in cookie
+	sid, ok := server.CookieValue(SESSION_ID_NAME) // session identifier is store in cookie
 
 	if ok {
 		if session, ok := sessions_get(sid); ok {
@@ -90,9 +103,18 @@ func (self *Session) CreateCookie(salt string) {
 	h.Write([]byte(sid))
 
 	self.sid = base64.URLEncoding.EncodeToString(h.Sum(nil))
-	self.server.SetCookieValue(SESSION_ID, self.sid)
+	self.server.SetCookieValue(SESSION_ID_NAME, self.sid)
 
 	self.save()
+}
+
+func (self *Session) Valid(salt, userAgent, remoteAddr string) bool {
+	h := HASH.New()
+	h.Write([]byte(salt))
+	h.Write([]byte(userAgent))
+	h.Write([]byte(remoteAddr))
+
+	return self.ID() == base64.URLEncoding.EncodeToString(h.Sum(nil))
 }
 
 // Strip removes unused references to memory,
