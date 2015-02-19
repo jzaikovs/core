@@ -49,16 +49,19 @@ type Input interface {
 	link_args([]T)
 	link_session(*session.Session)
 	addData(string, interface{})
+
+	Segments() []T
 }
 
 type t_input struct {
-	app     *App
-	request *http.Request
-	args    []T
-	session *session.Session
-	data    Map
-	parsed  bool
-	body    []byte
+	app      *App
+	request  *http.Request
+	args     []T
+	session  *session.Session
+	data     Map
+	parsed   bool
+	body     []byte
+	segments []T
 }
 
 func new_input(app *App, request *http.Request) (this *t_input) {
@@ -83,6 +86,14 @@ func new_input(app *App, request *http.Request) (this *t_input) {
 			} else {
 				this.data[key] = ""
 			}
+		}
+	}
+
+	this.segments = make([]T, 0)
+
+	if len(parts) > 0 {
+		for _, segment := range strings.Split(strings.Trim(parts[0], "/"), "/") {
+			this.segments = append(this.segments, T{segment})
 		}
 	}
 
@@ -186,6 +197,10 @@ func (this *t_input) RequestURI() string {
 		return strings.TrimRight(this.request.Header.Get("Request-Uri"), "?")[len(this.app.Config.Subdir):]
 	}
 	return this.request.URL.Path
+}
+
+func (this *t_input) Segments() []T {
+	return this.segments
 }
 
 func (this *t_input) HeaderValue(key string) string {
