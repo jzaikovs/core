@@ -105,6 +105,8 @@ func (this *output) Flush() {
 		return
 	}
 
+	this.noflush = true
+
 	this.response.WriteHeader(this.response_code)
 
 	// write only if there is something to write

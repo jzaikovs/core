@@ -26,7 +26,7 @@ func ServeFile(out Output, path string) {
 	out.SetContentType(mime.TypeByExtension(filepath.Ext(f.Name())))
 
 	// then write directly to response writer
-	io.Copy(out.ResponseWriter(), f)
+	io.Copy(out, f)
 
 	//out.Flush() // flush response header
 }
