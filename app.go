@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	APP                      = &App{Router: new_router()} // default application
+	APP                      = &App{Router: NewRouter()} // default application
 	DefaultConfig *t_configs = nil
 )
 

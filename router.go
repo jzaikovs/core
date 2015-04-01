@@ -21,7 +21,7 @@ type t_default_router struct {
 	routes []*Route
 }
 
-func new_router() Router {
+func NewRouter() Router {
 	return &t_default_router{routes: make([]*Route, 0)}
 }
 
