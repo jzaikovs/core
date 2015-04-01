@@ -10,13 +10,23 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"testing"
-	"time"
 )
 
-var _client = &http.Client{}
+var (
+	_client          = &http.Client{}
+	test_server_addr string
+)
 
 func init() {
 	_client.Jar, _ = cookiejar.New(nil)
+
+	DefaultConfig = new_t_config()
+	DefaultConfig.Host = "127.0.0.1"
+	DefaultConfig.Port = 8080
+
+	test_server_addr = fmt.Sprintf("http://%s:%d", DefaultConfig.Host, DefaultConfig.Port)
+
+	go Run()
 }
 
 func _get(t *testing.T, url string) *http.Response {
@@ -86,20 +96,10 @@ func TestBasic(t *testing.T) {
 		context.WriteString("limit")
 	}).RateLimit(5, 2)
 
-	// testing limited only to localhost
-	APP.Config = new_t_config()
-	APP.Config.Host = "127.0.0.1"
-	APP.Config.Port = 8080
-
-	addr := fmt.Sprintf("%s:%d", APP.Config.Host, APP.Config.Port)
-
-	go APP.Run()
-	time.Sleep(time.Second)
-
 	for k, v := range map[string]string{
-		`http://` + addr + `/test`:        `hello world`,
-		`http://` + addr + `/test/1/test`: `1test`,
-		`http://` + addr + `/json/1/test`: `{"0":1,"1":"test"}`,
+		test_server_addr + `/test`:        `hello world`,
+		test_server_addr + `/test/1/test`: `1test`,
+		test_server_addr + `/json/1/test`: `{"0":1,"1":"test"}`,
 	} {
 		if !_read_cmp(_get(t, k).Body, v) {
 			t.Log(k, v)

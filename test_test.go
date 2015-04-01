@@ -8,22 +8,8 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"strconv"
 	"testing"
 )
-
-var (
-	test_app = New()
-	test_url string
-)
-
-func init() {
-	test_app.Config = new_t_config()
-	test_app.Config.Host = "127.0.0.1"
-	test_app.Config.Port = 31337
-	go test_app.Run()
-	test_url = "http://127.0.0.1:" + strconv.Itoa(test_app.Config.Port)
-}
 
 func simple_resp(ret string) func(context Context) {
 	return func(context Context) {
@@ -61,7 +47,7 @@ func new_t_client() *t_test_client {
 
 // make client get request
 func (this *t_test_client) get(query string) string {
-	resp, err := this.raw.Get(test_url + query)
+	resp, err := this.raw.Get(test_server_addr + query)
 	if err != nil {
 		return "ERR"
 	}
@@ -78,7 +64,7 @@ func (this *t_test_client) post(query string, data Map) string {
 	b := new(bytes.Buffer)
 	b.WriteString(_to_json(data))
 
-	resp, err := this.raw.Post(test_url+query, ContentType_JSON, b)
+	resp, err := this.raw.Post(test_server_addr+query, ContentType_JSON, b)
 	if err != nil {
 		return "ERR"
 	}
@@ -91,7 +77,7 @@ func (this *t_test_client) post(query string, data Map) string {
 }
 
 func (this *t_test_client) cookie(name string) string {
-	u, err := url.Parse(test_url)
+	u, err := url.Parse(test_server_addr)
 	if err != nil {
 		panic(err)
 	}

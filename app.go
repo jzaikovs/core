@@ -3,72 +3,89 @@ package core
 import (
 	"fmt"
 	"github.com/jzaikovs/core/loggy"
-	. "github.com/jzaikovs/t"
 	"net"
 	"net/http"
 	"net/http/fcgi"
-	"time"
 )
 
-// default application
-var APP = New()
+var (
+	APP                      = &App{Router: new_router()} // default application
+	DefaultConfig *t_configs = nil
+)
 
+// structure represents single application on server
+// server can route multiple applications,
+// in different sub-directory or sub-domain
 type App struct {
-	Config *t_configs
-	routes []*t_route
-	hooks  map[string][]func()
+	Router
+	Config    *t_configs // TODO: for each there is application specific configuration
+	name      string
+	subdomain bool
 }
 
-func New() *App {
-	return &App{
-		routes: make([]*t_route, 0),
-		hooks:  make(map[string][]func()),
-	}
+// module is par of app, for each app there is module instance
+type Module struct {
 }
 
-func (this *App) Run() {
+func New(name string, subdomain bool) *App {
+	app := new(App)
+	app.name = name
+	app.subdomain = subdomain
+	return app
+}
+
+type ServerOption struct {
+}
+
+func Run() {
 	loggy.Start()
 
-	loggy.Info("creating core...")
+	loggy.Info("core.create...")
 	//  create configuration if no initialized
-	if this.Config == nil {
-		this.Config = new_t_config()
-		this.Config.Load("config.json") // default configuration
-		this.Config.Load("prod.json")   // production specific configuration
+	if DefaultConfig == nil {
+		DefaultConfig = new_t_config()
+		DefaultConfig.Load("config.json") // default configuration
+		DefaultConfig.Load("prod.json")   // production specific configuration
 	}
 
-	addr := fmt.Sprintf("%s:%d", this.Config.Host, this.Config.Port)
+	addr := fmt.Sprintf("%s:%d", DefaultConfig.Host, DefaultConfig.Port)
 
-	loggy.Info("core starting on", addr, "...")
+	loggy.Info("core.starting.on:", addr, "...")
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		panic(err)
 	}
 
-	this.executeHook("core.done")
+	//TODO: make it simple, do we really need hooks?
+	//this.executeHook("core.done")
 
-	if this.Config.FCGI {
-		fcgi.Serve(l, this)
+	if DefaultConfig.FCGI {
+		fcgi.Serve(l, APP)
 	} else {
-		http.Serve(l, this)
+		http.Serve(l, APP)
 	}
 }
 
 func (this *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if this.Config == nil {
+		this.Config = DefaultConfig
+	}
+
 	input := new_input(this, r)
 	output := new_output(w)
 
-	if this.route(input, output) {
+	if this.Route(t_context{input, output}) {
 		return
 	}
 
-	if this.Config.HandleContent {
+	if DefaultConfig.HandleContent {
 		ServeFile(output, input.RequestURI())
 	}
 	return
 }
 
+/*
 func (this *App) Handle(pattern string, handler http.Handler) {
 	r := newRoute("?", pattern, func(context Context) {
 		context.no_flush()
@@ -77,61 +94,7 @@ func (this *App) Handle(pattern string, handler http.Handler) {
 	r.handler = true
 	this.routes = append(this.routes, r)
 }
+*/
+func (this *App) Module(pattern string, router Router) {
 
-// Main method for dispatching routes
-// returns true if found route
-func (this *App) route(in Input, out Output) bool {
-	//loggy.Log("ROUTE", in.RemoteAddr(), in.Method(), in.RequestURI())
-
-	startTime := time.Now()
-
-	// TODO: this can be more optimized, for example dividing in buckets for each method
-	// TODO: try use trie (aka prefix-tree) as routing method
-	for _, r := range this.routes {
-		if !r.handler && in.Method() != r.method {
-			continue // skip routes with different method
-		}
-
-		matches := r.pattern.FindStringSubmatch(in.RequestURI())
-
-		if len(matches) == 0 {
-			continue // no match, go to next
-		}
-
-		// create arguments from groups in route pattern
-		// each group is next argument in arguments
-		matches = matches[1:]
-		args := make([]T, len(matches))
-		for i, match := range matches {
-			args[i] = T{match}
-		}
-
-		// so we found our request
-		r.handle(args, startTime, in, out)
-		return true
-	}
-
-	return false
-}
-
-func (this *App) add_route(method, pattern string, callback RouteFunc) *t_route {
-	r := newRoute(method, pattern, callback, this)
-	this.routes = append(this.routes, r)
-	return r
-}
-
-func (this *App) Get(pattern string, callback RouteFunc) *t_route {
-	return this.add_route("GET", pattern, callback)
-}
-
-func (this *App) Post(pattern string, callback RouteFunc) *t_route {
-	return this.add_route("POST", pattern, callback)
-}
-
-func (this *App) Put(pattern string, callback RouteFunc) *t_route {
-	return this.add_route("PUT", pattern, callback)
-}
-
-func (this *App) Delete(pattern string, callback RouteFunc) *t_route {
-	return this.add_route("DELETE", pattern, callback)
 }
