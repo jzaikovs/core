@@ -2,7 +2,7 @@ package core
 
 import (
 	"crypto"
-	_ "crypto/sha1"
+	_ "crypto/sha1" // used for SHA1 function
 	"encoding/base64"
 	"html"
 	"html/template"

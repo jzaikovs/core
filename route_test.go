@@ -1,8 +1,9 @@
 package core
 
 import (
-	. "github.com/jzaikovs/t"
 	"testing"
+
+	. "github.com/jzaikovs/t"
 )
 
 func TestCSRF(t *testing.T) {

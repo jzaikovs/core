@@ -22,6 +22,7 @@ func init() {
 	Start()
 }
 
+// Start initializes loggin structures and waits for logs to come in
 func Start() {
 	if running {
 		return
@@ -46,20 +47,22 @@ func Start() {
 	running = true
 }
 
-// function for logging data
+// Log is for logging data using specific tag
 func Log(tag string, args ...interface{}) {
 	q <- data{time.Now(), tag, "", args}
 }
 
-// function for lggin data with specific format
+// Logf function for lggin data with specific format and tag
 func Logf(tag string, format string, args ...interface{}) {
 	q <- data{time.Now(), tag, format, args}
 }
 
+// Info is wrapper for Log function using tag INFO
 func Info(obj ...interface{}) {
 	Log("INFO", obj...)
 }
 
+// Error is wrapper for Log function using tag ERR
 func Error(obj ...interface{}) {
 	Log("ERR", obj...)
 }

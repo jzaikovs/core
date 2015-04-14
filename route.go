@@ -2,17 +2,18 @@ package core
 
 import (
 	"crypto/rand"
-	"errors"
 	"fmt"
-	"github.com/jzaikovs/core/loggy"
-	"github.com/jzaikovs/core/session"
-	. "github.com/jzaikovs/t"
 	"regexp"
 	"time"
+
+	"github.com/jzaikovs/core/loggy"
+	"github.com/jzaikovs/core/session"
+	"github.com/jzaikovs/t"
 )
 
 type RouteFunc func(Context)
 
+// Route handles single route
 type Route struct {
 	app Router
 
@@ -21,14 +22,14 @@ type Route struct {
 	callback   RouteFunc
 	method     string
 
-	handler  bool
-	req_json bool
-	no_cache bool
+	handler     bool
+	jsonRequest bool
+	noCache     bool
 
 	// authorized user test config
-	test_authorized bool   // to call route function, session must be authorized
-	redirect        string // if doredirect set then redirects to redirect value
-	doredirect      bool
+	authRequest bool   // to call route function, session must be authorized
+	redirect    string // if doredirect set then redirects to redirect value
+	doredirect  bool
 	// rate-limits for guest and authorized user
 	limit      *ratelimit
 	limitAuth  *ratelimit
@@ -37,8 +38,8 @@ type Route struct {
 
 	rules []func(context Context) error
 
-	need_valid_csrf_token bool
-	emit_csrf_token       bool
+	validateCSRFToken bool
+	emitCSRFToken     bool
 
 	needs []string
 }
@@ -53,104 +54,107 @@ func newRoute(method, pattern string, callback RouteFunc, router Router) *Route 
 	}
 }
 
-func (this *Route) ReqAuth(args ...string) *Route {
-	this.test_authorized = true
+// ReqAuth marks route so that it can be accessed only by authorized session
+// if session is not authorized request is redirected to route that is passed in argument
+func (route *Route) ReqAuth(args ...string) *Route {
+	route.authRequest = true
 	if len(args) > 0 {
-		this.redirect = args[0]
-		this.doredirect = true
+		route.redirect = args[0]
+		route.doredirect = true
 	}
-	return this
+	return route
 }
 
-func (this *Route) Need(fields ...string) *Route {
-	this.rules = append(this.rules, func(context Context) error {
+// Need functions adds validation for mandatory fields
+func (route *Route) Need(fields ...string) *Route {
+	route.rules = append(route.rules, func(context Context) error {
 		data := context.Data()
 		// for request we can add some mandatory fields
 		// for example, we can add that for sign-in we need login and password
 		for _, need := range fields {
 			if _, ok := data[need]; !ok {
 				// TODO: if string, then check for empty string?
-				return errors.New(fmt.Sprintf("field [%s] required", need))
+				return fmt.Errorf("field [%s] required", need)
 			}
 		}
 
 		return nil
 	})
 
-	return this
+	return route
 }
 
-func (this *Route) RateLimitAuth(rate, per float32) *Route {
-	this.limitAuth = new_ratelimit(rate, per)
-	this.limitsAuth = make(map[string]*ratelimit)
-	return this
+func (route *Route) RateLimitAuth(rate, per float32) *Route {
+	route.limitAuth = newRateLimit(rate, per)
+	route.limitsAuth = make(map[string]*ratelimit)
+	return route
 }
 
 func (this *Route) RateLimit(rate, per float32) *Route {
-	this.limit = new_ratelimit(rate, per)
+	this.limit = newRateLimit(rate, per)
 	this.limits = make(map[string]*ratelimit)
 	return this
 }
 
-func (this *Route) Match(nameA, nameB string) *Route {
-	this.rules = append(this.rules, func(context Context) error {
+func (route *Route) Match(nameA, nameB string) *Route {
+	route.rules = append(route.rules, func(context Context) error {
 		data := context.Data()
 
 		if data.Str(nameA) != data.Str(nameB) {
-			return errors.New(fmt.Sprintf(`field [%s] not match field [%s]`, nameA, nameB))
+			return fmt.Errorf(`field [%s] not match field [%s]`, nameA, nameB)
 		}
 
 		return nil
 	})
 
-	return this
+	return route
 }
 
-// request content type must be json
-func (this *Route) JSON() *Route {
-	this.req_json = true
-	return this
+// JSON adds validation for request content so that only requests with content type json is handled
+func (route *Route) JSON() *Route {
+	route.jsonRequest = true
+	return route
 }
 
-// output of rout will not be cached in any way
+// NoCache marks request handler output of route will not be cached in any way
 // to client will be sent headers to not cache response
-func (this *Route) NoCache() *Route {
-	this.no_cache = true
-	return this
+func (route *Route) NoCache() *Route {
+	route.noCache = true
+	return route
 }
 
-// route option for setting CSRF validations
-func (this *Route) CSRF(emit, need bool) *Route {
-	this.emit_csrf_token = emit
-	this.need_valid_csrf_token = need
-	return this
+// CSRF route option for setting CSRF validations
+func (route *Route) CSRF(emit, need bool) *Route {
+	route.emitCSRFToken = emit
+	route.validateCSRFToken = need
+	return route
 }
 
-func (this *Route) test_rate_limit(context Context, t time.Time) bool {
+func (route *Route) checkRateLimit(context Context, t time.Time) bool {
 	var (
 		limit *ratelimit
 		ok    bool
 	)
 
 	if context.Session().IsAuth() {
-		if this.limitAuth == nil {
+		if route.limitAuth == nil {
 			return false
 		}
 
-		if limit, ok = this.limitsAuth[context.RemoteAddr()]; !ok { // TODO: improve and remove race
-			limit = new_ratelimit(this.limitAuth.rate, this.limitAuth.per)
-			limit.lass_check = t
-			this.limitsAuth[context.RemoteAddr()] = limit
+		if limit, ok = route.limitsAuth[context.RemoteAddr()]; !ok { // TODO: improve and remove race
+			limit = newRateLimit(route.limitAuth.rate, route.limitAuth.per)
+			limit.lastCheck = t
+			route.limitsAuth[context.RemoteAddr()] = limit
 		}
 
 	} else {
-		if this.limit == nil {
+		if route.limit == nil {
 			return false
 		}
-		if limit, ok = this.limits[context.RemoteAddr()]; !ok { // TODO: improve and remove race
-			limit = new_ratelimit(this.limit.rate, this.limit.per)
-			limit.lass_check = t
-			this.limits[context.RemoteAddr()] = limit
+		if limit, ok = route.limits[context.RemoteAddr()]; !ok { // TODO: improve and remove race
+			limit = newRateLimit(route.limit.rate, route.limit.per)
+			limit.lastCheck = t
+			route.limits[context.RemoteAddr()] = limit
 		}
 	}
 	ok = limit.test(t)
@@ -160,13 +164,13 @@ func (this *Route) test_rate_limit(context Context, t time.Time) bool {
 }
 
 // route handler method
-func (this *Route) handle(args []T, startTime time.Time, context Context) {
+func (route *Route) handle(args []t.T, startTime time.Time, context Context) {
 	// now defer that at the end we write data
 
 	defer context.Flush()
 
 	// route asks for JSON as content type
-	if this.req_json {
+	if route.jsonRequest {
 		if context.ContentType() != ContentType_JSON {
 			context.Response(Response_Unsupported_Media_Type)
 			return
@@ -174,25 +178,25 @@ func (this *Route) handle(args []T, startTime time.Time, context Context) {
 	}
 
 	// connect our request to session manager
-	context.link_args(args)
-	context.link_session(session.New(context))
+	context.linkArgs(args)
+	context.linkSession(session.New(context))
 
 	// defer some cleanup when done routing
 	defer context.Session().Unlink()
 
 	// testing rate limits
 	// TODO: need testing
-	if this.test_rate_limit(context, startTime) {
+	if route.checkRateLimit(context, startTime) {
 		context.Response(Response_Too_Many_Requests)
 		return
 	}
 
 	// testing if user is authorized
 	// route have flag that session must be authorize to access it
-	if this.test_authorized && !context.Session().IsAuth() {
+	if route.authRequest && !context.Session().IsAuth() {
 		// if we have set up redirect then on fail we redirect there
-		if this.doredirect {
-			context.Redirect(this.redirect)
+		if route.doredirect {
+			context.Redirect(route.redirect)
 			return
 		}
 		// else just say that we are unauthorized
@@ -200,7 +204,7 @@ func (this *Route) handle(args []T, startTime time.Time, context Context) {
 		return
 	}
 
-	if this.need_valid_csrf_token {
+	if route.validateCSRFToken {
 		csrf, ok := context.CookieValue("_csrf")
 		if !ok || len(csrf) == 0 || csrf != context.Session().Data.Str("_csrf") {
 			context.Response(Response_Forbidden) // TODO: what is best status code for CSRF violation
@@ -210,18 +214,18 @@ func (this *Route) handle(args []T, startTime time.Time, context Context) {
 		context.SetCookieValue("_csrf", "")
 	}
 
-	// this can be useful if we add session status in request data
+	// route can be useful if we add session status in request data
 	// TODO: need some mark to identify core added data, example, $is_auth, $base_url, etc..
 	context.addData("is_auth", context.Session().IsAuth())
 
-	if this.no_cache {
-		// this is for IE to not cache JSON responses!
+	if route.noCache {
+		// route is for IE to not cache JSON responses!
 		context.AddHeader("If-Modified-Since", "01 Jan 1970 00:00:00 GMT")
 		context.AddHeader("Cache-Control", "no-cache")
 	}
 
-	// TODO: verify that this is good way to emit CSRF tokens
-	if this.emit_csrf_token {
+	// TODO: verify that route is good way to emit CSRF tokens
+	if route.emitCSRFToken {
 		// generate csrf token
 		b := make([]byte, 16)
 		rand.Read(b)
@@ -231,7 +235,7 @@ func (this *Route) handle(args []T, startTime time.Time, context Context) {
 	}
 
 	// validate all added rules
-	for _, rule := range this.rules {
+	for _, rule := range route.rules {
 		if err := rule(context); err != nil {
 			loggy.Log("BAD", context.RemoteAddr(), err)
 			context.WriteJSON(DefaultConfig.err_object_func(Response_Bad_Request, err))
@@ -241,5 +245,5 @@ func (this *Route) handle(args []T, startTime time.Time, context Context) {
 	}
 
 	// call route function
-	this.callback(context)
+	route.callback(context)
 }

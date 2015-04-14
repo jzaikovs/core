@@ -2,31 +2,34 @@ package core
 
 import (
 	"fmt"
-	"github.com/jzaikovs/core/loggy"
 	"net"
 	"net/http"
 	"net/http/fcgi"
+
+	"github.com/jzaikovs/core/loggy"
 )
 
-var (
-	APP                      = &App{Router: NewRouter()} // default application
-	DefaultConfig *t_configs = nil
-)
+// Default application handler
+var APP = &App{Router: NewRouter()} // default application
 
-// structure represents single application on server
+// Default global configuration
+var DefaultConfig *configStruct
+
+// App structure represents single application on server
 // server can route multiple applications,
 // in different sub-directory or sub-domain
 type App struct {
 	Router
-	Config    *t_configs // TODO: for each there is application specific configuration
+	Config    *configStruct // TODO: for each there is application specific configuration
 	name      string
 	subdomain bool
 }
 
-// module is par of app, for each app there is module instance
+// Module is par of app, for each app there is module instance
 type Module struct {
 }
 
+// New functions is constructor for app structure
 func New(name string, subdomain bool) *App {
 	app := new(App)
 	app.name = name
@@ -34,16 +37,14 @@ func New(name string, subdomain bool) *App {
 	return app
 }
 
-type ServerOption struct {
-}
-
+// Run function will initiaate default config load and start listening for requests
 func Run() {
 	loggy.Start()
 
 	loggy.Info("core.create...")
 	//  create configuration if no initialized
 	if DefaultConfig == nil {
-		DefaultConfig = new_t_config()
+		DefaultConfig = newConfigStruct()
 		DefaultConfig.Load("config.json") // default configuration
 		DefaultConfig.Load("prod.json")   // production specific configuration
 	}
@@ -57,9 +58,6 @@ func Run() {
 		panic(err)
 	}
 
-	//TODO: make it simple, do we really need hooks?
-	//this.executeHook("core.done")
-
 	if DefaultConfig.FCGI {
 		fcgi.Serve(l, APP)
 	} else {
@@ -67,15 +65,15 @@ func Run() {
 	}
 }
 
-func (this *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if this.Config == nil {
-		this.Config = DefaultConfig
+func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if app.Config == nil {
+		app.Config = DefaultConfig
 	}
 
-	input := new_input(this, r)
-	output := new_output(w)
+	input := newInput(app, r)
+	output := newOutput(w)
 
-	if this.Route(t_context{input, output}) {
+	if app.Route(context{input, output}) {
 		return
 	}
 
@@ -85,16 +83,14 @@ func (this *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// TODO: this functions should be reworked
 /*
-func (this *App) Handle(pattern string, handler http.Handler) {
+func (app *App) Handle(pattern string, handler http.Handler) {
 	r := newRoute("?", pattern, func(context Context) {
-		context.no_flush()
+		context.noFlush()
 		handler.ServeHTTP(context.ResponseWriter(), context.Request())
-	}, this)
+	}, app)
 	r.handler = true
-	this.routes = append(this.routes, r)
+	app. = append(app.routes, r)
 }
 */
-func (this *App) Module(pattern string, router Router) {
-
-}

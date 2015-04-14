@@ -3,12 +3,13 @@ package core
 import (
 	"bytes"
 	"fmt"
-	. "github.com/jzaikovs/t"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"testing"
+
+	. "github.com/jzaikovs/t"
 )
 
 func simple_resp(ret string) func(context Context) {

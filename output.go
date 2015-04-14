@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// Output is interface for route output handler
 type Output interface {
 	// writing function
 	Write([]byte) (n int, err error)
@@ -27,99 +28,99 @@ type Output interface {
 	ResponseWriter() http.ResponseWriter
 	Flush()
 
-	no_flush()
+	noFlush()
 }
 
 type output struct {
-	response      http.ResponseWriter
-	buffer        bytes.Buffer
-	response_code int
-	noflush       bool
+	response     http.ResponseWriter
+	buffer       bytes.Buffer
+	responseCode int
+	noflush      bool
 }
 
-func new_output(response http.ResponseWriter) *output {
-	this := &output{response: response, response_code: 200}
-	this.SetContentType(MIME_HTML)
-	this.AddHeader("Access-Control-Allow-Origin", "*")
-	return this
+func newOutput(response http.ResponseWriter) *output {
+	out := &output{response: response, responseCode: 200}
+	out.SetContentType(MIME_HTML)
+	out.AddHeader("Access-Control-Allow-Origin", "*")
+	return out
 }
 
-func (this *output) Write(p []byte) (n int, err error) {
-	return this.buffer.Write(p)
+func (out *output) Write(p []byte) (n int, err error) {
+	return out.buffer.Write(p)
 }
 
-func (this *output) Response(code int) {
-	this.response_code = code
+func (out *output) Response(code int) {
+	out.responseCode = code
 }
 
-func (this *output) Header() http.Header {
-	return this.response.Header()
+func (out *output) Header() http.Header {
+	return out.response.Header()
 }
 
-func (this *output) WriteString(str string) (n int, err error) {
-	return this.buffer.WriteString(str)
+func (out *output) WriteString(str string) (n int, err error) {
+	return out.buffer.WriteString(str)
 }
 
-func (this *output) WriteJSON(i interface{}) []byte {
-	this.buffer.Reset()
+func (out *output) WriteJSON(i interface{}) []byte {
+	out.buffer.Reset()
 	bytes, err := json.Marshal(i)
 	if err != nil {
-		this.response.WriteHeader(500)
-		this.WriteString(err.Error())
+		out.response.WriteHeader(500)
+		out.WriteString(err.Error())
 	} else {
-		this.SetContentType(MIME_JSON)
-		this.Write(bytes)
+		out.SetContentType(MIME_JSON)
+		out.Write(bytes)
 	}
 	return bytes
 }
 
-func (this *output) SetContentType(mime string) {
-	this.response.Header().Set("Content-Type", mime)
+func (out *output) SetContentType(mime string) {
+	out.response.Header().Set("Content-Type", mime)
 }
 
-func (this *output) SetCookieValue(name, value string) {
+func (out *output) SetCookieValue(name, value string) {
 	cookie := &http.Cookie{}
 	cookie.Expires = time.Now().Add(time.Hour * 24 * 30)
 	cookie.Name = name
 	cookie.Value = value
 	cookie.Path = "/"
-	http.SetCookie(this.response, cookie)
+	http.SetCookie(out.response, cookie)
 }
 
-func (this *output) Redirect(url ...string) {
+func (out *output) Redirect(url ...string) {
 	if len(url) == 0 {
-		this.response.Header().Set("Location", "/")
+		out.response.Header().Set("Location", "/")
 	} else {
-		this.response.Header().Set("Location", url[0]) //todo: need testing!!!
+		out.response.Header().Set("Location", url[0]) //todo: need testing!!!
 	}
-	this.response_code = 302
+	out.responseCode = 302
 }
 
-func (this *output) AddHeader(name string, value interface{}) {
-	this.response.Header().Set(name, fmt.Sprint(value))
+func (out *output) AddHeader(name string, value interface{}) {
+	out.response.Header().Set(name, fmt.Sprint(value))
 }
 
 // write header and send buffer to response writer
-func (this *output) Flush() {
-	if this.noflush {
+func (out *output) Flush() {
+	if out.noflush {
 		return
 	}
 
-	this.noflush = true
+	out.noflush = true
 
-	this.response.WriteHeader(this.response_code)
+	out.response.WriteHeader(out.responseCode)
 
 	// write only if there is something to write
-	if this.buffer.Len() > 0 {
-		this.response.Write(this.buffer.Bytes())
-		this.buffer.Reset()
+	if out.buffer.Len() > 0 {
+		out.response.Write(out.buffer.Bytes())
+		out.buffer.Reset()
 	}
 }
 
-func (this *output) ResponseWriter() http.ResponseWriter {
-	return this.response
+func (out *output) ResponseWriter() http.ResponseWriter {
+	return out.response
 }
 
-func (this *output) no_flush() {
-	this.noflush = true
+func (out *output) noFlush() {
+	out.noflush = true
 }

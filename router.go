@@ -1,11 +1,12 @@
 package core
 
 import (
-	. "github.com/jzaikovs/t"
 	"time"
+
+	"github.com/jzaikovs/t"
 )
 
-// this will be router interface for modules,
+// Router is interface for implement specific routing engines,
 // for example we have module user which handles users, we can then port
 // module across other projects that uses core
 type Router interface {
@@ -17,25 +18,26 @@ type Router interface {
 	Route(context Context) bool
 }
 
-type t_default_router struct {
+type defaultRouter struct {
 	routes []*Route
 }
 
+// NewRouter is constructor for creating router instance for default core router
 func NewRouter() Router {
-	return &t_default_router{routes: make([]*Route, 0)}
+	return &defaultRouter{routes: make([]*Route, 0)}
 }
 
-// Main method for dispatching routes
+// Route if main method for dispatching routes
 // returns true if found route
-func (this *t_default_router) Route(context Context) bool {
+func (router *defaultRouter) Route(context Context) bool {
 
 	//loggy.Log("ROUTE", context.RemoteAddr(), context.Method(), context.RequestURI())
 
 	startTime := time.Now()
 
-	// TODO: this can be more optimized, for example dividing in buckets for each method
+	// TODO: router can be more optimized, for example dividing in buckets for each method
 	// TODO: try use trie (aka prefix-tree) as routing method
-	for _, r := range this.routes {
+	for _, r := range router.routes {
 		if !r.handler && context.Method() != r.method {
 			continue // skip routes with different method
 		}
@@ -49,9 +51,9 @@ func (this *t_default_router) Route(context Context) bool {
 		// create arguments from groups in route pattern
 		// each group is next argument in arguments
 		matches = matches[1:]
-		args := make([]T, len(matches))
+		args := make([]t.T, len(matches))
 		for i, match := range matches {
-			args[i] = T{match}
+			args[i] = t.T{Value: match}
 		}
 
 		// so we found our request
@@ -62,24 +64,28 @@ func (this *t_default_router) Route(context Context) bool {
 	return false
 }
 
-func (this *t_default_router) add_route(method, pattern string, callback RouteFunc) *Route {
-	r := newRoute(method, pattern, callback, this)
-	this.routes = append(this.routes, r)
+func (router *defaultRouter) addRoute(method, pattern string, callback RouteFunc) *Route {
+	r := newRoute(method, pattern, callback, router)
+	router.routes = append(router.routes, r)
 	return r
 }
 
-func (this *t_default_router) Get(pattern string, callback RouteFunc) *Route {
-	return this.add_route("GET", pattern, callback)
+// Get adds router handler for GET request
+func (router *defaultRouter) Get(pattern string, callback RouteFunc) *Route {
+	return router.addRoute("GET", pattern, callback)
 }
 
-func (this *t_default_router) Post(pattern string, callback RouteFunc) *Route {
-	return this.add_route("POST", pattern, callback)
+// Post adds router for POST request
+func (router *defaultRouter) Post(pattern string, callback RouteFunc) *Route {
+	return router.addRoute("POST", pattern, callback)
 }
 
-func (this *t_default_router) Put(pattern string, callback RouteFunc) *Route {
-	return this.add_route("PUT", pattern, callback)
+// Put adds router for PUT request
+func (router *defaultRouter) Put(pattern string, callback RouteFunc) *Route {
+	return router.addRoute("PUT", pattern, callback)
 }
 
-func (this *t_default_router) Delete(pattern string, callback RouteFunc) *Route {
-	return this.add_route("DELETE", pattern, callback)
+// Delete adds router for DELETE request
+func (router *defaultRouter) Delete(pattern string, callback RouteFunc) *Route {
+	return router.addRoute("DELETE", pattern, callback)
 }

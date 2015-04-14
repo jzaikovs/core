@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	. "github.com/jzaikovs/t"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"testing"
+
+	. "github.com/jzaikovs/t"
 )
 
 var (

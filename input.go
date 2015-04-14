@@ -3,14 +3,16 @@ package core
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/jzaikovs/core/loggy"
-	"github.com/jzaikovs/core/session"
-	. "github.com/jzaikovs/t"
 	"io/ioutil"
 	"net/http"
 	"strings"
+
+	"github.com/jzaikovs/core/loggy"
+	"github.com/jzaikovs/core/session"
+	"github.com/jzaikovs/t"
 )
 
+// Input is interface for routes input handler
 type Input interface {
 	App() *App
 
@@ -35,9 +37,9 @@ type Input interface {
 	// Returns true if request is marked as AJAX based
 	Ajax() bool
 	// Access to URL parameters
-	Args(int) T
+	Args(int) t.T
 	// Access to posted data
-	Data() Map
+	Data() t.Map
 	// Provides access to session data
 	Session() *session.Session
 
@@ -46,33 +48,33 @@ type Input interface {
 
 	Request() *http.Request
 
-	link_args([]T)
-	link_session(*session.Session)
+	linkArgs([]t.T)
+	linkSession(*session.Session)
 	addData(string, interface{})
 
-	Segments() []T
+	Segments() []t.T
 }
 
-type t_input struct {
+type defaultInput struct {
 	app      *App
 	request  *http.Request
-	args     []T
+	args     []t.T
 	session  *session.Session
-	data     Map
+	data     t.Map
 	parsed   bool
 	body     []byte
-	segments []T
+	segments []t.T
 }
 
-func new_input(app *App, request *http.Request) (this *t_input) {
-	this = &t_input{
+func newInput(app *App, request *http.Request) (in *defaultInput) {
+	in = &defaultInput{
 		request: request,
-		data:    make(Map),
-		args:    make([]T, 0),
+		data:    make(t.Map),
+		args:    make([]t.T, 0),
 		app:     app,
 	}
 
-	parts := strings.Split(this.RequestURI(), "?")
+	parts := strings.Split(in.RequestURI(), "?")
 	if len(parts) > 1 {
 		for _, part := range strings.Split(parts[1], "&") {
 			idx := strings.Index(part, "=")
@@ -82,67 +84,67 @@ func new_input(app *App, request *http.Request) (this *t_input) {
 			key := part[:idx]
 			if len(part) > idx+1 {
 				val := part[idx+1:]
-				this.data[key] = val
+				in.data[key] = val
 			} else {
-				this.data[key] = ""
+				in.data[key] = ""
 			}
 		}
 	}
 
-	this.segments = make([]T, 0)
+	in.segments = make([]t.T, 0)
 
 	if len(parts) > 0 {
 		for _, segment := range strings.Split(strings.Trim(parts[0], "/"), "/") {
-			this.segments = append(this.segments, T{segment})
+			in.segments = append(in.segments, t.T{Value: segment})
 		}
 	}
 
-	this.body, _ = ioutil.ReadAll(this.request.Body)
-	this.request.Body.Close()
+	in.body, _ = ioutil.ReadAll(in.request.Body)
+	in.request.Body.Close()
 
 	buf := new(bytes.Buffer)
-	buf.Write(this.body)
-	this.request.Body = ioutil.NopCloser(buf)
+	buf.Write(in.body)
+	in.request.Body = ioutil.NopCloser(buf)
 
-	this.data["base_url"] = app.Config.BaseUrl
-	return this
+	in.data["base_url"] = app.Config.BaseURL
+	return in
 }
 
-func (this *t_input) App() *App {
-	return this.app
+func (in *defaultInput) App() *App {
+	return in.app
 }
 
-func (this *t_input) link_args(args []T) {
-	this.args = args
+func (in *defaultInput) linkArgs(args []t.T) {
+	in.args = args
 }
 
-func (this *t_input) link_session(session *session.Session) {
-	this.session = session
+func (in *defaultInput) linkSession(session *session.Session) {
+	in.session = session
 }
 
-func (this *t_input) Args(idx int) T {
-	return this.args[idx]
+func (in *defaultInput) Args(idx int) t.T {
+	return in.args[idx]
 }
 
-func (this *t_input) Session() *session.Session {
-	return this.session
+func (in *defaultInput) Session() *session.Session {
+	return in.session
 }
-func (this *t_input) ContentType() string {
-	return this.HeaderValue("Content-Type")
+func (in *defaultInput) ContentType() string {
+	return in.HeaderValue("Content-Type")
 }
 
-func (this *t_input) Data() Map {
+func (in *defaultInput) Data() t.Map {
 	// repeat request will return result of previous calls
-	if this.parsed {
-		return this.data
+	if in.parsed {
+		return in.data
 	}
 
-	if strings.Contains(this.ContentType(), ContentType_JSON) {
-		temp := make(Map)
+	if strings.Contains(in.ContentType(), ContentType_JSON) {
+		temp := make(t.Map)
 
 		// parse body for JSON data into temporal map
-		if err := json.Unmarshal(this.body, &temp); err != nil {
-			loggy.Error("core.input.data err", this.RemoteAddr(), err.Error(), string(this.body))
+		if err := json.Unmarshal(in.body, &temp); err != nil {
+			loggy.Error("core.input.data err", in.RemoteAddr(), err.Error(), string(in.body))
 		}
 
 		// clean all incoming values, to protect as from some bad injections
@@ -150,107 +152,107 @@ func (this *t_input) Data() Map {
 		for k, v := range temp {
 			switch val := v.(type) {
 			case string:
-				this.data[k] = Clean(val)
+				in.data[k] = Clean(val)
 			default:
-				this.data[k] = v
+				in.data[k] = v
 			}
 		}
 
 		// mark that data is parsed and can be returned on next call without parsing
-		this.parsed = true
+		in.parsed = true
 
-		return this.data
+		return in.data
 	}
 
-	if this.request.Form == nil {
-		this.request.ParseMultipartForm(32 << 20) // 32MB
+	if in.request.Form == nil {
+		in.request.ParseMultipartForm(32 << 20) // 32MB
 	}
 
 	// read all form values if we have post-data
-	for k, v := range this.request.Form {
+	for k, v := range in.request.Form {
 		switch len(v) {
 		case 1:
-			this.data[k] = v[0] // remove from slice if single value
+			in.data[k] = v[0] // remove from slice if single value
 		case 0:
 		default:
-			this.data[k] = v
+			in.data[k] = v
 		}
 	}
 
-	this.parsed = true
+	in.parsed = true
 
-	return this.data
+	return in.data
 }
 
-func (this *t_input) RequestURI() string {
-	if this.app.Config.FCGI && len(this.request.URL.Opaque) > 0 {
+func (in *defaultInput) RequestURI() string {
+	if in.app.Config.FCGI && len(in.request.URL.Opaque) > 0 {
 		// using Nginx hack
 		// fastcgi_param REQUEST_URI "$scheme: $request_uri";
 		// fastcgi_param HTTP_HOST "";
-		return this.request.URL.Opaque[1:]
+		return in.request.URL.Opaque[1:]
 	}
-	if len(this.request.RequestURI) > 0 {
-		return this.request.RequestURI
-	} else if this.app.Config.FCGI {
+	if len(in.request.RequestURI) > 0 {
+		return in.request.RequestURI
+	} else if in.app.Config.FCGI {
 		// using Nginx hack
 		// fastcgi_param HTTP_REQUEST_URI $request_uri;
-		return strings.TrimRight(this.request.Header.Get("Request-Uri"), "?")[len(this.app.Config.Subdir):]
+		return strings.TrimRight(in.request.Header.Get("Request-Uri"), "?")[len(in.app.Config.Subdir):]
 	}
-	return this.request.URL.Path
+	return in.request.URL.Path
 }
 
-func (this *t_input) Segments() []T {
-	return this.segments
+func (in *defaultInput) Segments() []t.T {
+	return in.segments
 }
 
-func (this *t_input) HeaderValue(key string) string {
-	return this.request.Header.Get(key)
+func (in *defaultInput) HeaderValue(key string) string {
+	return in.request.Header.Get(key)
 }
 
-func (this *t_input) Get(key string) (val string) {
-	val = this.data.Str(key)
+func (in *defaultInput) Get(key string) (val string) {
+	val = in.data.Str(key)
 	return
 }
 
-func (this *t_input) Method() string {
-	return this.request.Method
+func (in *defaultInput) Method() string {
+	return in.request.Method
 }
 
-func (this *t_input) FormValue(name string) string {
-	return this.request.FormValue(name)
+func (in *defaultInput) FormValue(name string) string {
+	return in.request.FormValue(name)
 }
 
-func (this *t_input) CookieValue(name string) (string, bool) {
-	cookie, err := this.request.Cookie(name)
+func (in *defaultInput) CookieValue(name string) (string, bool) {
+	cookie, err := in.request.Cookie(name)
 	if err != nil {
 		return "", false
 	}
 	return cookie.Value, true
 }
 
-func (this *t_input) UserAgent() string {
-	return this.request.UserAgent()
+func (in *defaultInput) UserAgent() string {
+	return in.request.UserAgent()
 }
 
-func (this *t_input) RemoteAddr() string {
-	return strings.Split(this.request.RemoteAddr, ":")[0]
+func (in *defaultInput) RemoteAddr() string {
+	return strings.Split(in.request.RemoteAddr, ":")[0]
 }
 
-func (this *t_input) Body() string {
-	return string(this.body)
+func (in *defaultInput) Body() string {
+	return string(in.body)
 }
 
-func (this *t_input) Ajax() bool {
-	if this.ContentType() == "application/json" {
+func (in *defaultInput) Ajax() bool {
+	if in.ContentType() == "application/json" {
 		return true
 	}
-	return strings.ToLower(this.request.Header.Get("X-Requested-With")) == "xmlhttprequest"
+	return strings.ToLower(in.request.Header.Get("X-Requested-With")) == "xmlhttprequest"
 }
 
-func (this *t_input) Request() *http.Request {
-	return this.request
+func (in *defaultInput) Request() *http.Request {
+	return in.request
 }
 
-func (this *t_input) addData(k string, v interface{}) {
-	this.data[k] = v
+func (in *defaultInput) addData(k string, v interface{}) {
+	in.data[k] = v
 }

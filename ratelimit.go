@@ -5,30 +5,30 @@ import (
 )
 
 type ratelimit struct {
-	rate       float32 // requests
-	per        float32 // seconds
-	allowance  float32
-	lass_check time.Time
+	rate      float32 // requests
+	per       float32 // seconds
+	allowance float32
+	lastCheck time.Time
 }
 
-func new_ratelimit(rate, per float32) *ratelimit {
+func newRateLimit(rate, per float32) *ratelimit {
 	return &ratelimit{rate: rate, per: per, allowance: rate}
 }
 
 // thx http://stackoverflow.com/a/668327
-func (this *ratelimit) test(current time.Time) bool {
-	time_passed := time.Since(current)
-	this.lass_check = current
-	this.allowance += float32(time_passed.Seconds()) * (this.rate / this.per)
+func (rate *ratelimit) test(current time.Time) bool {
+	timePassed := time.Since(current)
+	rate.lastCheck = current
+	rate.allowance += float32(timePassed.Seconds()) * (rate.rate / rate.per)
 
-	if this.allowance > this.rate {
-		this.allowance = this.rate
+	if rate.allowance > rate.rate {
+		rate.allowance = rate.rate
 	}
 
-	if this.allowance < 1.0 {
+	if rate.allowance < 1.0 {
 		return false
 	}
 
-	this.allowance -= 1.0
+	rate.allowance -= 1.0
 	return true
 }

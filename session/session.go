@@ -2,19 +2,22 @@ package session
 
 import (
 	"crypto"
-	_ "crypto/sha1"
+	_ "crypto/sha1" // default hash package
 	"encoding/base64"
-	. "github.com/jzaikovs/t"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/jzaikovs/t"
 )
 
-var (
-	SESSION_ID_NAME             = "sid"
-	HASH            crypto.Hash = crypto.SHA1
-)
+// SessionCookieName stores name of cookie used to link request with session data
+var SessionCookieName = "sid"
 
+// DefaultHash is crypto hash used to makce session ID
+var DefaultHash = crypto.SHA1
+
+// Server is interface/trates that should be implemented to use this package
 type Server interface {
 	CookieValue(name string) (string, bool)
 	SetCookieValue(name, value string)
@@ -25,102 +28,115 @@ type Server interface {
 var sessions = make(map[string]*Session) // todo: consider map[int] as it is rumored to be faster
 var sessionslock = sync.RWMutex{}
 
-func sessions_get(sid string) (session *Session, ok bool) {
+func getSession(sid string) (session *Session, ok bool) {
 	sessionslock.RLock()
 	session, ok = sessions[sid]
 	sessionslock.RUnlock()
 	return
 }
 
-func (self *Session) save() {
+func (session *Session) save() {
 	sessionslock.Lock()
-	sessions[self.sid] = self
+	sessions[session.sid] = session
 	sessionslock.Unlock()
 }
 
+// Session represents single session from one user across requests
 type Session struct {
 	sid        string
 	authorized bool
 	server     Server
-	Data       Map
+	Data       t.Map
 }
 
+// Validate validates request for session storage
+// returns session ID and true/false for if session found or not
 func Validate(req *http.Request) (string, bool) {
-	cookie, err := req.Cookie(SESSION_ID_NAME)
+	cookie, err := req.Cookie(SessionCookieName)
 	if err != nil {
 		return "", false
 	}
 
-	if sesssion, ok := sessions_get(cookie.Value); ok {
+	if sesssion, ok := getSession(cookie.Value); ok {
 		return sesssion.ID(), sesssion.Valid("", req.UserAgent(), req.RemoteAddr)
 	}
 	return "", false
 }
 
+// New creates new session, using structure which implements Server interface
 func New(server Server) *Session {
-	sid, ok := server.CookieValue(SESSION_ID_NAME) // session identifier is store in cookie
+	sid, ok := server.CookieValue(SessionCookieName) // session identifier is store in cookie
 
 	if ok {
-		if session, ok := sessions_get(sid); ok {
+		if session, ok := getSession(sid); ok {
 			session.server = server
 			return session
 		}
 	}
 
-	self := new(Session)
-	self.server = server
-	self.Data = make(Map)
-	self.CreateCookie(time.Now().String())
-	return self
+	session := new(Session)
+	session.server = server
+	session.Data = make(t.Map)
+	session.CreateCookie(time.Now().String())
+	return session
 }
 
-func (self *Session) ID() string {
-	return self.sid
+// ID returns session ID which is equeal to cookie session id
+func (session *Session) ID() string {
+	return session.sid
 }
 
-func (self *Session) IsAuth() bool {
-	return self.authorized
+// IsAuth returns true if session is authorized
+func (session *Session) IsAuth() bool {
+	return session.authorized
 }
 
-func (self *Session) Destroy() {
+// Destroy destroys session data from session storage
+func (session *Session) Destroy() {
 	sessionslock.Lock()
-	delete(sessions, self.sid)
+	delete(sessions, session.sid)
 	sessionslock.Unlock()
 }
 
-func (self *Session) Authorize(salt string) {
-	self.Destroy()
-	self.CreateCookie(salt)
-	self.authorized = true
+// Authorize marks session as authorized, you can pass sepecific value as "salt"/key.
+// salt/key value should be used in validate call
+// for new sessions ID generation, session id cookie is recreated with different ID
+// to prevent session fixation attacks
+func (session *Session) Authorize(salt string) {
+	session.Destroy()          // destroy old session
+	session.CreateCookie(salt) // create new session with new ID
+	session.authorized = true
 }
 
-func (self *Session) CreateCookie(salt string) {
+// CreateCookie will create cookie using salt/key
+func (session *Session) CreateCookie(salt string) {
 	sid := salt
-	sid += self.server.UserAgent()
-	sid += self.server.RemoteAddr()
+	sid += session.server.UserAgent()
+	sid += session.server.RemoteAddr()
 
-	h := HASH.New()
+	h := DefaultHash.New()
 	h.Write([]byte(sid))
 
-	self.sid = base64.URLEncoding.EncodeToString(h.Sum(nil))
-	self.server.SetCookieValue(SESSION_ID_NAME, self.sid)
+	session.sid = base64.URLEncoding.EncodeToString(h.Sum(nil))
+	session.server.SetCookieValue(SessionCookieName, session.sid)
 
-	self.save()
+	session.save()
 }
 
-func (self *Session) Valid(salt, userAgent, remoteAddr string) bool {
-	h := HASH.New()
+// Valid validates session
+func (session *Session) Valid(salt, userAgent, remoteAddr string) bool {
+	h := DefaultHash.New()
 	h.Write([]byte(salt))
 	h.Write([]byte(userAgent))
 	h.Write([]byte(remoteAddr))
 
-	return self.ID() == base64.URLEncoding.EncodeToString(h.Sum(nil))
+	return session.ID() == base64.URLEncoding.EncodeToString(h.Sum(nil))
 }
 
-// Strip removes unused references to memory,
+// Unlink removes unused references to memory,
 // fo example 10k users session is stored in
 // memory but we don't need to hold Server instance, it can be huge
-func (self *Session) Unlink() {
+func (session *Session) Unlink() {
 	//this is needed for Go GC to do it's job
-	self.server = nil
+	session.server = nil
 }
