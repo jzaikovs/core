@@ -21,8 +21,3 @@ const (
 	Response_Too_Many_Requests      = 429
 	Response_Internal_Server_Error  = 500
 )
-
-const (
-	Header_X_Rate_Limit_Limit     = `X-Rate-Limit-Limit`
-	Header_X_Rate_Limit_Remaining = `X-Rate-Limit-Remaining`
-)

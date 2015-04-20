@@ -4,6 +4,11 @@ import (
 	"time"
 )
 
+const (
+	Header_X_Rate_Limit_Limit     = `X-Rate-Limit-Limit`
+	Header_X_Rate_Limit_Remaining = `X-Rate-Limit-Remaining`
+)
+
 type ratelimit struct {
 	rate      float32 // requests
 	per       float32 // seconds

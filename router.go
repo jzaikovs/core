@@ -1,6 +1,7 @@
 package core
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/jzaikovs/t"
@@ -16,6 +17,7 @@ type Router interface {
 	Delete(string, RouteFunc) *Route
 	// main routing function
 	Route(context Context) bool
+	Handle(pattern string, handler http.Handler)
 }
 
 type defaultRouter struct {
@@ -46,6 +48,11 @@ func (router *defaultRouter) Route(context Context) bool {
 
 		if len(matches) == 0 {
 			continue // no match, go to next
+		}
+
+		if r.handler {
+			r.callback(context)
+			return true
 		}
 
 		// create arguments from groups in route pattern
@@ -88,4 +95,14 @@ func (router *defaultRouter) Put(pattern string, callback RouteFunc) *Route {
 // Delete adds router for DELETE request
 func (router *defaultRouter) Delete(pattern string, callback RouteFunc) *Route {
 	return router.addRoute("DELETE", pattern, callback)
+}
+
+// Handle implemted to support 3rd party packages that uses http.Handler
+func (router *defaultRouter) Handle(pattern string, handler http.Handler) {
+	r := router.addRoute("?", pattern, func(context Context) {
+		context.noFlush()
+		handler.ServeHTTP(context.ResponseWriter(), context.Request())
+	})
+	// mark router as handler
+	r.handler = true
 }

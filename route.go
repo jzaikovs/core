@@ -90,10 +90,10 @@ func (route *Route) RateLimitAuth(rate, per float32) *Route {
 	return route
 }
 
-func (this *Route) RateLimit(rate, per float32) *Route {
-	this.limit = newRateLimit(rate, per)
-	this.limits = make(map[string]*ratelimit)
-	return this
+func (route *Route) RateLimit(rate, per float32) *Route {
+	route.limit = newRateLimit(rate, per)
+	route.limits = make(map[string]*ratelimit)
+	return route
 }
 
 func (route *Route) Match(nameA, nameB string) *Route {
