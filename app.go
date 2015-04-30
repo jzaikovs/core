@@ -10,13 +10,10 @@ import (
 )
 
 // Default application handler
-var APP = &App{Router: nil} // default application
+var APP = &App{Router: NewRouter()} // default application
 
 // Default global configuration
 var DefaultConfig *configStruct
-
-// Default router is used when no other router is specified for app
-var DefaultRouter Router
 
 // App structure represents single application on server
 // server can route multiple applications,
@@ -43,11 +40,6 @@ func New(name string, subdomain bool) *App {
 // Run function will initiaate default config load and start listening for requests
 func Run() {
 	loggy.Start()
-
-	// Link default router if 3rd party router is not added
-	if APP.Router == nil {
-		APP.Router = DefaultRouter
-	}
 
 	loggy.Info("core.create...")
 	//  create configuration if no initialized
