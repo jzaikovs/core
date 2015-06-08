@@ -7,7 +7,7 @@ import (
 )
 
 func TestCSRF(t *testing.T) {
-	c := new_t_client()
+	c := newTestClient()
 
 	query := "/csrf"
 
@@ -23,7 +23,7 @@ func TestCSRF(t *testing.T) {
 }
 
 func TestMatchNeed(t *testing.T) {
-	c := new_t_client()
+	c := newTestClient()
 
 	query := "/match"
 

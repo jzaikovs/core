@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/jzaikovs/core/loggy"
@@ -51,19 +52,17 @@ type Input interface {
 	linkArgs([]t.T)
 	linkSession(*session.Session)
 	addData(string, interface{})
-
-	Segments() []t.T
 }
 
 type defaultInput struct {
-	app      *App
-	request  *http.Request
-	args     []t.T
-	session  *session.Session
-	data     t.Map
-	parsed   bool
-	body     []byte
-	segments []t.T
+	app     *App
+	request *http.Request
+	args    []t.T
+	session *session.Session
+	data    t.Map
+	parsed  bool
+	body    []byte
+	reqURI  string
 }
 
 func newInput(app *App, request *http.Request) (in *defaultInput) {
@@ -74,30 +73,7 @@ func newInput(app *App, request *http.Request) (in *defaultInput) {
 		app:     app,
 	}
 
-	parts := strings.Split(in.RequestURI(), "?")
-	if len(parts) > 1 {
-		for _, part := range strings.Split(parts[1], "&") {
-			idx := strings.Index(part, "=")
-			if idx <= 0 {
-				continue
-			}
-			key := part[:idx]
-			if len(part) > idx+1 {
-				val := part[idx+1:]
-				in.data[key] = val
-			} else {
-				in.data[key] = ""
-			}
-		}
-	}
-
-	in.segments = make([]t.T, 0)
-
-	if len(parts) > 0 {
-		for _, segment := range strings.Split(strings.Trim(parts[0], "/"), "/") {
-			in.segments = append(in.segments, t.T{Value: segment})
-		}
-	}
+	in.parseSegments()
 
 	in.body, _ = ioutil.ReadAll(in.request.Body)
 	in.request.Body.Close()
@@ -108,6 +84,22 @@ func newInput(app *App, request *http.Request) (in *defaultInput) {
 
 	in.data["base_url"] = app.Config.BaseURL
 	return in
+}
+
+func (in *defaultInput) parseSegments() {
+	u, err := url.ParseQuery(in.RequestURI())
+	if err != nil {
+		loggy.Error(err)
+		return
+	}
+
+	for k, v := range u {
+		if len(v) == 1 {
+			in.data[k] = v[0]
+		} else {
+			in.data[k] = v
+		}
+	}
 }
 
 func (in *defaultInput) App() *App {
@@ -184,25 +176,30 @@ func (in *defaultInput) Data() t.Map {
 	return in.data
 }
 
-func (in *defaultInput) RequestURI() string {
+func (in *defaultInput) RequestURI() (uri string) {
+	if in.reqURI != "" {
+		return in.reqURI
+	}
+
+	uri = in.request.URL.Path
+
 	if in.app.Config.FCGI && len(in.request.URL.Opaque) > 0 {
 		// using Nginx hack
 		// fastcgi_param REQUEST_URI "$scheme: $request_uri";
 		// fastcgi_param HTTP_HOST "";
-		return in.request.URL.Opaque[1:]
+		uri = in.request.URL.Opaque[1:]
+	} else {
+		if len(in.request.RequestURI) > 0 {
+			uri = in.request.RequestURI
+		} else if in.app.Config.FCGI {
+			// using Nginx hack
+			// fastcgi_param HTTP_REQUEST_URI $request_uri;
+			uri = strings.TrimRight(in.request.Header.Get("Request-Uri"), "?")[len(in.app.Config.Subdir):]
+		}
 	}
-	if len(in.request.RequestURI) > 0 {
-		return in.request.RequestURI
-	} else if in.app.Config.FCGI {
-		// using Nginx hack
-		// fastcgi_param HTTP_REQUEST_URI $request_uri;
-		return strings.TrimRight(in.request.Header.Get("Request-Uri"), "?")[len(in.app.Config.Subdir):]
-	}
-	return in.request.URL.Path
-}
 
-func (in *defaultInput) Segments() []t.T {
-	return in.segments
+	in.reqURI = uri
+	return
 }
 
 func (in *defaultInput) HeaderValue(key string) string {

@@ -34,21 +34,21 @@ func assert_s(t *testing.T, a, b string, msg string) {
 }
 
 // test client structure
-type t_test_client struct {
+type testClient struct {
 	raw *http.Client
 }
 
 // function for creating testing client
-func new_t_client() *t_test_client {
-	this := new(t_test_client)
+func newTestClient() *testClient {
+	this := new(testClient)
 	this.raw = new(http.Client)
 	this.raw.Jar, _ = cookiejar.New(nil)
 	return this
 }
 
 // make client get request
-func (this *t_test_client) get(query string) string {
-	resp, err := this.raw.Get(test_server_addr + query)
+func (this *testClient) get(query string) string {
+	resp, err := this.raw.Get(testServerURL + query)
 	if err != nil {
 		return "ERR"
 	}
@@ -61,11 +61,11 @@ func (this *t_test_client) get(query string) string {
 }
 
 // make client post request
-func (this *t_test_client) post(query string, data Map) string {
+func (this *testClient) post(query string, data Map) string {
 	b := new(bytes.Buffer)
 	b.WriteString(_to_json(data))
 
-	resp, err := this.raw.Post(test_server_addr+query, ContentType_JSON, b)
+	resp, err := this.raw.Post(testServerURL+query, ContentType_JSON, b)
 	if err != nil {
 		return "ERR"
 	}
@@ -77,8 +77,8 @@ func (this *t_test_client) post(query string, data Map) string {
 	return fmt.Sprintf("%d:%s", resp.StatusCode, string(p))
 }
 
-func (this *t_test_client) cookie(name string) string {
-	u, err := url.Parse(test_server_addr)
+func (this *testClient) cookie(name string) string {
+	u, err := url.Parse(testServerURL)
 	if err != nil {
 		panic(err)
 	}

@@ -29,5 +29,5 @@ func ServeFile(out Output, path string) {
 	// then write directly to response writer
 	io.Copy(out, f)
 
-	//out.Flush() // flush response header
+	out.Flush() // flush response header
 }

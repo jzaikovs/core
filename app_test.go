@@ -14,18 +14,18 @@ import (
 )
 
 var (
-	_client          = &http.Client{}
-	test_server_addr string
+	_client       = &http.Client{}
+	testServerURL string
 )
 
 func init() {
 	_client.Jar, _ = cookiejar.New(nil)
 
-	DefaultConfig = new_t_config()
+	DefaultConfig = newConfigStruct()
 	DefaultConfig.Host = "127.0.0.1"
 	DefaultConfig.Port = 8080
 
-	test_server_addr = fmt.Sprintf("http://%s:%d", DefaultConfig.Host, DefaultConfig.Port)
+	testServerURL = fmt.Sprintf("http://%s:%d", DefaultConfig.Host, DefaultConfig.Port)
 
 	go Run()
 }
@@ -98,9 +98,9 @@ func TestBasic(t *testing.T) {
 	}).RateLimit(5, 2)
 
 	for k, v := range map[string]string{
-		test_server_addr + `/test`:        `hello world`,
-		test_server_addr + `/test/1/test`: `1test`,
-		test_server_addr + `/json/1/test`: `{"0":1,"1":"test"}`,
+		testServerURL + `/test`:        `hello world`,
+		testServerURL + `/test/1/test`: `1test`,
+		testServerURL + `/json/1/test`: `{"0":1,"1":"test"}`,
 	} {
 		if !_read_cmp(_get(t, k).Body, v) {
 			t.Log(k, v)

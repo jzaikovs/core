@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/fcgi"
+	"strings"
 
 	"github.com/jzaikovs/core/loggy"
 )
@@ -23,6 +24,7 @@ type App struct {
 	Config    *configStruct // TODO: for each there is application specific configuration
 	name      string
 	subdomain bool
+	subs      map[string]*App
 }
 
 // Module is par of app, for each app there is module instance
@@ -31,10 +33,11 @@ type Module struct {
 
 // New functions is constructor for app structure
 func New(name string, subdomain bool) *App {
-	app := new(App)
-	app.name = name
-	app.subdomain = subdomain
-	return app
+	return &App{
+		name:      name,
+		subdomain: subdomain,
+		subs:      make(map[string]*App),
+	}
 }
 
 // Run function will initiaate default config load and start listening for requests
@@ -65,6 +68,11 @@ func Run() {
 	}
 }
 
+// Sub is used to link application module to main application module
+func (app *App) Sub(name string, sub *App) {
+	app.subs[strings.ToLower(name)] = sub
+}
+
 func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if app.Config == nil {
 		app.Config = DefaultConfig
@@ -75,6 +83,18 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if app.Route(context{input, output}) {
 		return
+	}
+
+	// subs only executes when base routing failed
+	parts := strings.Split(input.RequestURI(), "/")
+	if len(parts) > 0 {
+		if sub, ok := app.subs[strings.ToLower(parts[0])]; ok {
+			// sub-app router will work as if it is main router
+			input.reqURI = "/" + strings.Join(parts[1:], "/")
+			if sub.Route(context{input, output}) {
+				return
+			}
+		}
 	}
 
 	if DefaultConfig.HandleContent {
