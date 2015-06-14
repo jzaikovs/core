@@ -9,14 +9,14 @@ import (
 )
 
 type configStruct struct {
-	Host          string                 `json:"host"`
-	BaseURL       string                 `json:"base_url"`
-	FCGI          bool                   `json:"fcgi"`
-	HandleContent bool                   `json:"handle_content"`
-	Port          int                    `json:"port"`
-	Subdir        string                 `json:"subdir"`
-	Views         map[string]string      `json:"views"`
-	Data          map[string]interface{} `json:"data"`
+	Host          string            `json:"host"`
+	BaseURL       string            `json:"base_url"`
+	FCGI          bool              `json:"fcgi"`
+	HandleContent bool              `json:"handle_content"`
+	Port          int               `json:"port"`
+	Subdir        string            `json:"subdir"`
+	Views         map[string]string `json:"views"`
+	Data          t.Map             `json:"data"`
 
 	err_object_func func(code int, err error) interface{}
 }
