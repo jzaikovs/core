@@ -56,14 +56,14 @@ func (config *configStruct) Load(path string) error {
 	if err = json.Unmarshal(bytes, config); err != nil {
 		return err
 	}
-	loggy.Info("Configuration loaded from file:", path)
+	loggy.Info.Println("Configuration loaded from file:", path)
 
 	b, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
-		loggy.Info(err)
+		loggy.Info.Println(err)
 	}
 
-	loggy.Info("Configs:\n", string(b))
+	loggy.Info.Println("Configs:\n", string(b))
 
 	return nil
 }

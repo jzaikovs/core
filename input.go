@@ -89,7 +89,7 @@ func newInput(app *App, request *http.Request) (in *defaultInput) {
 func (in *defaultInput) parseSegments() {
 	u, err := url.ParseQuery(in.RequestURI())
 	if err != nil {
-		loggy.Error(err)
+		loggy.Error.Println(err)
 		return
 	}
 
@@ -136,7 +136,7 @@ func (in *defaultInput) Data() t.Map {
 
 		// parse body for JSON data into temporal map
 		if err := json.Unmarshal(in.body, &temp); err != nil {
-			loggy.Error("core.input.data err", in.RemoteAddr(), err.Error(), string(in.body))
+			loggy.Error.Println("core.input.data err", in.RemoteAddr(), err.Error(), string(in.body))
 		}
 
 		// clean all incoming values, to protect as from some bad injections

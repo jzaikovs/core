@@ -1,68 +1,15 @@
 package loggy
 
 import (
-	"fmt"
+	"io/ioutil"
 	"log"
-	"time"
+	"os"
 )
 
-type data struct {
-	tx     time.Time
-	tag    string
-	format string
-	args   []interface{}
-}
+var Trace = log.New(ioutil.Discard, "TRACE: ", log.Ldate|log.Ltime|log.Lshortfile)
 
-var (
-	q       = make(chan data)
-	running bool
-)
+var Info = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 
-func init() {
-	Start()
-}
+var Warning = log.New(os.Stdout, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
 
-// Start initializes loggin structures and waits for logs to come in
-func Start() {
-	if running {
-		return
-	}
-	fmt.Println("loggy starting...")
-	go func() {
-		for {
-			// reatriev next log in line
-			d, ok := <-q
-			if !ok {
-				break
-			}
-
-			if len(d.format) == 0 {
-				log.Println(d.tx.UnixNano(), d.tag, fmt.Sprint(d.args))
-			} else {
-				log.Println(d.tx.UnixNano(), d.tag, fmt.Sprintf(d.format, d.args...))
-			}
-		}
-	}()
-
-	running = true
-}
-
-// Log is for logging data using specific tag
-func Log(tag string, args ...interface{}) {
-	q <- data{time.Now(), tag, "", args}
-}
-
-// Logf function for lggin data with specific format and tag
-func Logf(tag string, format string, args ...interface{}) {
-	q <- data{time.Now(), tag, format, args}
-}
-
-// Info is wrapper for Log function using tag INFO
-func Info(obj ...interface{}) {
-	Log("INFO", obj...)
-}
-
-// Error is wrapper for Log function using tag ERR
-func Error(obj ...interface{}) {
-	Log("ERR", obj...)
-}
+var Error = log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)

@@ -42,9 +42,7 @@ func New(name string, subdomain bool) *App {
 
 // Run function will initiaate default config load and start listening for requests
 func Run() {
-	loggy.Start()
-
-	loggy.Info("core.create...")
+	loggy.Info.Println("Starting core...")
 	//  create configuration if no initialized
 	if DefaultConfig == nil {
 		DefaultConfig = newConfigStruct()
@@ -54,12 +52,13 @@ func Run() {
 
 	addr := fmt.Sprintf("%s:%d", DefaultConfig.Host, DefaultConfig.Port)
 
-	loggy.Info("core.starting.on:", addr, "...")
-
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		panic(err)
+		loggy.Error.Println(err)
+		return
 	}
+
+	loggy.Info.Println("Listening on:", addr)
 
 	if DefaultConfig.FCGI {
 		fcgi.Serve(l, APP)

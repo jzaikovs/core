@@ -11,6 +11,7 @@ import (
 	"github.com/jzaikovs/t"
 )
 
+// RouteFunc is function type used in routes
 type RouteFunc func(Context)
 
 // Route handles single route
@@ -84,18 +85,21 @@ func (route *Route) Need(fields ...string) *Route {
 	return route
 }
 
+// RateLimitAuth sets routes maximum request rate per time for authorized users
 func (route *Route) RateLimitAuth(rate, per float32) *Route {
 	route.limitAuth = newRateLimit(rate, per)
 	route.limitsAuth = make(map[string]*ratelimit)
 	return route
 }
 
+// RateLimit sets routes maximum request rate per time
 func (route *Route) RateLimit(rate, per float32) *Route {
 	route.limit = newRateLimit(rate, per)
 	route.limits = make(map[string]*ratelimit)
 	return route
 }
 
+// Match sets a rule that two input data fields should match
 func (route *Route) Match(nameA, nameB string) *Route {
 	route.rules = append(route.rules, func(context Context) error {
 		data := context.Data()
@@ -237,7 +241,7 @@ func (route *Route) handle(args []t.T, startTime time.Time, context Context) {
 	// validate all added rules
 	for _, rule := range route.rules {
 		if err := rule(context); err != nil {
-			loggy.Log("BAD", context.RemoteAddr(), err)
+			loggy.Warning.Println(context.RemoteAddr(), err)
 			context.WriteJSON(DefaultConfig.err_object_func(Response_Bad_Request, err))
 			context.Response(Response_Bad_Request)
 			return
