@@ -16,6 +16,12 @@ var APP = &App{Router: NewRouter()} // default application
 // Default global configuration
 var DefaultConfig *configStruct
 
+func init() {
+	DefaultConfig = newConfigStruct()
+	DefaultConfig.Load("config.json") // default configuration
+	DefaultConfig.Load("prod.json")   // production specific configuration
+}
+
 // App structure represents single application on server
 // server can route multiple applications,
 // in different sub-directory or sub-domain
@@ -43,12 +49,6 @@ func New(name string, subdomain bool) *App {
 // Run function will initiaate default config load and start listening for requests
 func Run() {
 	loggy.Info.Println("Starting core...")
-	//  create configuration if no initialized
-	if DefaultConfig == nil {
-		DefaultConfig = newConfigStruct()
-		DefaultConfig.Load("config.json") // default configuration
-		DefaultConfig.Load("prod.json")   // production specific configuration
-	}
 
 	addr := fmt.Sprintf("%s:%d", DefaultConfig.Host, DefaultConfig.Port)
 
