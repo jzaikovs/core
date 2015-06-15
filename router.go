@@ -46,6 +46,8 @@ func (router *defaultRouter) Route(context Context) bool {
 
 		matches := r.pattern.FindStringSubmatch(context.RequestURI())
 
+		//loggy.Trace.Println(matches)
+
 		if len(matches) == 0 {
 			continue // no match, go to next
 		}

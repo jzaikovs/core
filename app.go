@@ -14,10 +14,9 @@ import (
 var APP = &App{Router: NewRouter()} // default application
 
 // Default global configuration
-var DefaultConfig *configStruct
+var DefaultConfig = newConfigStruct()
 
 func init() {
-	DefaultConfig = newConfigStruct()
 	DefaultConfig.Load("config.json") // default configuration
 	DefaultConfig.Load("prod.json")   // production specific configuration
 }
@@ -43,6 +42,8 @@ func New(name string, subdomain bool) *App {
 		name:      name,
 		subdomain: subdomain,
 		subs:      make(map[string]*App),
+		Config:    DefaultConfig,
+		Router:    NewRouter(),
 	}
 }
 
@@ -69,6 +70,9 @@ func Run() {
 
 // Sub is used to link application module to main application module
 func (app *App) Sub(name string, sub *App) {
+	if app.subs == nil {
+		app.subs = make(map[string]*App)
+	}
 	app.subs[strings.ToLower(name)] = sub
 }
 
@@ -80,23 +84,32 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	input := newInput(app, r)
 	output := newOutput(w)
 
+	loggy.Trace.Println(input.RequestURI())
+
 	if app.Route(context{input, output}) {
 		return
 	}
 
 	// subs only executes when base routing failed
-	parts := strings.Split(input.RequestURI(), "/")
+	parts := strings.Split(strings.Trim(input.RequestURI(), "/"), "/")
 	if len(parts) > 0 {
+		loggy.Trace.Println(parts)
 		if sub, ok := app.subs[strings.ToLower(parts[0])]; ok {
+
 			// sub-app router will work as if it is main router
 			input.reqURI = "/" + strings.Join(parts[1:], "/")
+			loggy.Trace.Println("Executing module", parts[0], input.RequestURI())
 			if sub.Route(context{input, output}) {
 				return
 			}
+			loggy.Trace.Println("module failed")
 		}
 	}
 
 	if DefaultConfig.HandleContent {
+		//fs := http.FileServer(http.Dir("./www"))
+		//fs.ServeHTTP(w, r)
+
 		ServeFile(output, input.RequestURI())
 	}
 	return

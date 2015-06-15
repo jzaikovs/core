@@ -3,8 +3,11 @@ package core
 import (
 	"io"
 	"mime"
+	"net/url"
 	"os"
 	"path/filepath"
+
+	"github.com/jzaikovs/core/loggy"
 )
 
 func init() {
@@ -14,8 +17,13 @@ func init() {
 // ServeFile this is just for development, file handling (CDN) better done by nginx or other
 // TODO: there can be better alternative just to use http.FileServer
 func ServeFile(out Output, path string) {
-	//Log.Info("serving file:", path)
-	f, err := os.OpenFile("./www/"+path, os.O_RDONLY, 0)
+	if x, err := url.Parse(path); err == nil {
+		path = x.Path
+	}
+
+	loggy.Trace.Println(path)
+
+	f, err := os.OpenFile(filepath.Join("./www/", path), os.O_RDONLY, 0)
 	if err != nil {
 		out.Response(Response_Not_Found)
 		out.Flush()
