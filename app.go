@@ -114,15 +114,3 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	return
 }
-
-// TODO: this functions should be reworked
-/*
-func (app *App) Handle(pattern string, handler http.Handler) {
-	r := newRoute("?", pattern, func(context Context) {
-		context.noFlush()
-		handler.ServeHTTP(context.ResponseWriter(), context.Request())
-	}, app)
-	r.handler = true
-	app. = append(app.routes, r)
-}
-*/

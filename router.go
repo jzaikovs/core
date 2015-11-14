@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jzaikovs/core/loggy"
 	"github.com/jzaikovs/t"
 )
 
@@ -74,6 +75,7 @@ func (router *defaultRouter) Route(context Context) bool {
 }
 
 func (router *defaultRouter) addRoute(method, pattern string, callback RouteFunc) *Route {
+	loggy.Info.Println(method, pattern)
 	r := newRoute(method, pattern, callback, router)
 	router.routes = append(router.routes, r)
 	return r
