@@ -160,7 +160,7 @@ func (route *Route) exeedsRateLimit(context Context, t time.Time) bool {
 			return true
 		}
 
-		context.AddHeader(HeaderXRateLimit, route.limitsAuth.Capacity())
+		context.AddHeader(HeaderXRateLimit, route.limits.Capacity())
 		context.AddHeader(HeaderXRateLimitRemaining, space)
 	}
 
