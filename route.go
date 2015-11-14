@@ -9,6 +9,12 @@ import (
 	"github.com/jzaikovs/core/loggy"
 	"github.com/jzaikovs/core/session"
 	"github.com/jzaikovs/t"
+	"github.com/jzaikovs/tokenbucket"
+)
+
+const (
+	HeaderXRateLimit          = `X-Rate-Limit-Limit`
+	HeaderXRateLimitRemaining = `X-Rate-Limit-Remaining`
 )
 
 // RouteFunc is function type used in routes
@@ -31,11 +37,10 @@ type Route struct {
 	authRequest bool   // to call route function, session must be authorized
 	redirect    string // if doredirect set then redirects to redirect value
 	doredirect  bool
+
 	// rate-limits for guest and authorized user
-	limit      *ratelimit
-	limitAuth  *ratelimit
-	limits     map[string]*ratelimit // this is rate limit for each IP address
-	limitsAuth map[string]*ratelimit
+	limits     *tokenbucket.Buckets // this is rate limit for each IP address
+	limitsAuth *tokenbucket.Buckets
 
 	rules []func(context Context) error
 
@@ -87,15 +92,13 @@ func (route *Route) Need(fields ...string) *Route {
 
 // RateLimitAuth sets routes maximum request rate per time for authorized users
 func (route *Route) RateLimitAuth(rate, per float32) *Route {
-	route.limitAuth = newRateLimit(rate, per)
-	route.limitsAuth = make(map[string]*ratelimit)
+	route.limitsAuth = tokenbucket.NewBuckets(int(rate), rate/per)
 	return route
 }
 
-// RateLimit sets routes maximum request rate per time
+// RateLimit sets routes maximum request rate per second from specific remote IP
 func (route *Route) RateLimit(rate, per float32) *Route {
-	route.limit = newRateLimit(rate, per)
-	route.limits = make(map[string]*ratelimit)
+	route.limits = tokenbucket.NewBuckets(int(rate), rate/per)
 	return route
 }
 
@@ -134,37 +137,34 @@ func (route *Route) CSRF(emit, need bool) *Route {
 	return route
 }
 
-func (route *Route) checkRateLimit(context Context, t time.Time) bool {
-	var (
-		limit *ratelimit
-		ok    bool
-	)
+func (route *Route) exeedsRateLimit(context Context, t time.Time) bool {
 
+	// if session is authorized then check auth rate limits
 	if context.Session().IsAuth() {
-		if route.limitAuth == nil {
-			return false
+		if route.limitsAuth != nil {
+			space, ok := route.limitsAuth.Add(context.RemoteAddr(), t)
+			if !ok {
+				return true
+			}
+
+			context.AddHeader(HeaderXRateLimit, route.limitsAuth.Capacity())
+			context.AddHeader(HeaderXRateLimitRemaining, space)
 		}
 
-		if limit, ok = route.limitsAuth[context.RemoteAddr()]; !ok { // TODO: improve and remove race
-			limit = newRateLimit(route.limitAuth.rate, route.limitAuth.per)
-			limit.lastCheck = t
-			route.limitsAuth[context.RemoteAddr()] = limit
-		}
-
-	} else {
-		if route.limit == nil {
-			return false
-		}
-		if limit, ok = route.limits[context.RemoteAddr()]; !ok { // TODO: improve and remove race
-			limit = newRateLimit(route.limit.rate, route.limit.per)
-			limit.lastCheck = t
-			route.limits[context.RemoteAddr()] = limit
-		}
+		return false
 	}
-	ok = limit.test(t)
-	context.AddHeader(Header_X_Rate_Limit_Limit, int(limit.rate))
-	context.AddHeader(Header_X_Rate_Limit_Remaining, int(limit.allowance))
-	return !ok
+
+	if route.limits != nil {
+		space, ok := route.limits.Add(context.RemoteAddr(), t)
+		if !ok { // reached guest rate limie for IP, to many request from this IP
+			return true
+		}
+
+		context.AddHeader(HeaderXRateLimit, route.limitsAuth.Capacity())
+		context.AddHeader(HeaderXRateLimitRemaining, space)
+	}
+
+	return false
 }
 
 // route handler method
@@ -190,7 +190,7 @@ func (route *Route) handle(args []t.T, startTime time.Time, context Context) {
 
 	// testing rate limits
 	// TODO: need testing
-	if route.checkRateLimit(context, startTime) {
+	if route.exeedsRateLimit(context, startTime) {
 		context.Response(Response_Too_Many_Requests)
 		return
 	}
