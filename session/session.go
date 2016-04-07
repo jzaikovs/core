@@ -28,7 +28,8 @@ type Server interface {
 var sessions = make(map[string]*Session) // todo: consider map[int] as it is rumored to be faster
 var sessionslock = sync.RWMutex{}
 
-func getSession(sid string) (session *Session, ok bool) {
+// Get will return session for specific SID
+func Get(sid string) (session *Session, ok bool) {
 	sessionslock.RLock()
 	session, ok = sessions[sid]
 	sessionslock.RUnlock()
@@ -51,16 +52,16 @@ type Session struct {
 
 // Validate validates request for session storage
 // returns session ID and true/false for if session found or not
-func Validate(req *http.Request) (string, bool) {
+func Validate(req *http.Request) (*Session, bool) {
 	cookie, err := req.Cookie(SessionCookieName)
 	if err != nil {
-		return "", false
+		return nil, false
 	}
 
-	if sesssion, ok := getSession(cookie.Value); ok {
-		return sesssion.ID(), sesssion.Valid("", req.UserAgent(), req.RemoteAddr)
+	if sesssion, ok := Get(cookie.Value); ok {
+		return sesssion, sesssion.Valid("", req.UserAgent(), req.RemoteAddr)
 	}
-	return "", false
+	return nil, false
 }
 
 // New creates new session, using structure which implements Server interface
@@ -68,7 +69,7 @@ func New(server Server) *Session {
 	sid, ok := server.CookieValue(SessionCookieName) // session identifier is store in cookie
 
 	if ok {
-		if session, ok := getSession(sid); ok {
+		if session, ok := Get(sid); ok {
 			session.server = server
 			return session
 		}
