@@ -15,7 +15,7 @@ import (
 
 // Input is interface for routes input handler
 type Input interface {
-	//App() *App
+	App() *App
 
 	RequestURI() string
 	// Get used for getting GET passed parameters
